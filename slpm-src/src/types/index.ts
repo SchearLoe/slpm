@@ -251,6 +251,57 @@ export interface AiUsageSummary {
   byDay: { date: string; tokens: number }[];
 }
 
+// ============ 标签库（P6-A） ============
+// 工作区级标签：name + color。任务通过 Task.tags String[] 引用 name。
+
+export type TagColor =
+  | 'emerald'
+  | 'cyan'
+  | 'purple'
+  | 'rose'
+  | 'amber'
+  | 'sky'
+  | 'indigo'
+  | 'teal'
+  | 'slate';
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: TagColor;
+  workspaceId: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============ 任务清单子项（P6-B Checklist） ============
+
+export interface TaskChecklistItem {
+  id: string;
+  taskId: string;
+  content: string;
+  done: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============ 审计日志（P6-C） ============
+
+export interface AuditLog {
+  id: string;
+  actorId: string | null;
+  actor: { id: string; name: string; avatar: string | null; email: string } | null;
+  action: string;
+  target: string;
+  ip: string | null;
+  userAgent: string | null;
+  workspaceId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 // ============ 产品线 / 版本（P3） ============
 // 层级：Product（产品线）→ Workspace（项目）→ Task
 

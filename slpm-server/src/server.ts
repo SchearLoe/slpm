@@ -16,6 +16,8 @@ import aiRoutes from './routes/ai.routes.js';
 import productRoutes from './routes/product.routes.js';
 import productVersionRoutes from './routes/product-version.routes.js';
 import productDashboardRoutes from './routes/product-dashboard.routes.js';
+import tagRoutes from './routes/tag.routes.js';
+import auditRoutes from './routes/audit.routes.js';
 import { setupSocket } from './lib/ws.js';
 import { ensureSystemAdmin } from './lib/seed.js';
 import { errorHandler, notFound } from './middleware/error.js';
@@ -57,6 +59,10 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/products', productVersionRoutes);
 app.use('/api/products', productDashboardRoutes);
+// P6-A：工作区标签库
+app.use('/api/tags', tagRoutes);
+// P6-C：审计日志（登录/成员变更/角色变更等）
+app.use('/api/audit', auditRoutes);
 
 // ---- 错误兜底 ----
 app.use(notFound);

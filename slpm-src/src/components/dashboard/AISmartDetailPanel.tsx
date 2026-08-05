@@ -12,12 +12,16 @@ import {
   MessageSquare,
   Activity as ActivityIcon,
   Send,
+  Trash2,
+  Pencil,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { springSoft } from '@/lib/motion';
 import { LiquidModal } from '@/components/ui/LiquidModal';
-import { useCompleteTask, useUpdateTask, useComments, useCreateComment, useTaskActivity, streamAiSuggest } from '@/lib/queries';
+import { Avatar } from '@/components/ui/Avatar';
+import { TaskChecklist } from '@/components/dashboard/TaskChecklist';
+import { useCompleteTask, useUpdateTask, useComments, useCreateComment, useUpdateComment, useDeleteComment, useTaskActivity, streamAiSuggest } from '@/lib/queries';
 import { apiError } from '@/lib/api';
 import confetti from 'canvas-confetti';
 
@@ -51,15 +55,20 @@ function renderCommentBody(body: string): React.ReactNode {
 }
 
 export const AISmartDetailPanel: React.FC = () => {
-  const { selectedTask, setSelectedTask, setEditingTask, enableConfetti } = useApp();
+  const { selectedTask, setSelectedTask, setEditingTask, enableConfetti, currentRole } = useApp();
   const { user } = useAuth();
   const completeTask = useCompleteTask();
   const updateTask = useUpdateTask();
   // P1-1：评论 / 活动流（task 可能 undefined，hooks 内部用 enabled 守卫）
   const commentsQ = useComments(selectedTask?.id);
   const createComment = useCreateComment(selectedTask?.id);
+  const updateComment = useUpdateComment(selectedTask?.id);
+  const deleteComment = useDeleteComment(selectedTask?.id);
   const activityQ = useTaskActivity(selectedTask?.id);
   const [commentDraft, setCommentDraft] = useState('');
+  // P6-E2：评论编辑状态
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentDraft, setEditCommentDraft] = useState('');
   const [showAiDetail, setShowAiDetail] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [toast, setToast] = useState('');
@@ -260,7 +269,10 @@ export const AISmartDetailPanel: React.FC = () => {
               </div>
 
               {/* P1-1：活动流（评论 + 任务变更合并，时间倒序） */}
-              <div className="mt-5 p-3.5 rounded-2xl bg-black/25 border border-white/[0.07] space-y-2.5">
+              {/* P6-B：任务清单（Checklist，可勾选子项 + 完成度） */}
+              <TaskChecklist taskId={task.id} />
+
+              <div className="mt-3 p-3.5 rounded-2xl bg-black/25 border border-white/[0.07] space-y-2.5">
                 <div className="flex items-center gap-1.5 text-[12px] font-bold text-white">
                   <ActivityIcon className="w-3.5 h-3.5 text-emerald-300" />
                   活动流
@@ -274,11 +286,7 @@ export const AISmartDetailPanel: React.FC = () => {
                   <ul className="space-y-2 relative z-10">
                     {activityQ.data.slice(0, 8).map((a) => (
                       <li key={`${a.kind}-${a.id}`} className="flex gap-2 text-[11px] leading-relaxed">
-                        <span
-                          className="shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-200 flex items-center justify-center text-[9px] font-bold"
-                        >
-                          {a.actor.avatar || a.actor.name.slice(0, 1)}
-                        </span>
+                        <Avatar avatar={a.actor.avatar} name={a.actor.name} size="xs" />
                         <div className="min-w-0 flex-1">
                           <span className="text-white/80 font-medium">{a.actor.name}</span>{' '}
                           <span className="text-white/55">{a.action}</span>
@@ -308,22 +316,91 @@ export const AISmartDetailPanel: React.FC = () => {
 
                 {commentsQ.data && commentsQ.data.length > 0 ? (
                   <ul className="space-y-2.5">
-                    {commentsQ.data.map((c) => (
-                      <li key={c.id} className="flex gap-2">
-                        <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-200 flex items-center justify-center text-[10px] font-bold">
-                          {c.author.avatar || c.author.name.slice(0, 1)}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="text-[11px] font-medium text-white/85">{c.author.name}</span>
-                            <span className="text-[10px] text-white/30">{timeAgo(c.createdAt)}</span>
+                    {commentsQ.data.map((c) => {
+                      const isAuthor = c.author.id === user?.id;
+                      const canModerate = currentRole === 'admin' || currentRole === 'pm';
+                      const isEditing = editingCommentId === c.id;
+                      return (
+                        <li key={c.id} className="flex gap-2 group">
+                          <Avatar avatar={c.author.avatar} name={c.author.name} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-[11px] font-medium text-white/85">{c.author.name}</span>
+                              <span className="text-[10px] text-white/30">{timeAgo(c.createdAt)}</span>
+                              {/* P6-E2：编辑/删除（仅作者或 admin/pm） */}
+                              {(isAuthor || canModerate) && !isEditing && (
+                                <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {isAuthor && (
+                                    <button
+                                      onClick={() => {
+                                        setEditingCommentId(c.id);
+                                        setEditCommentDraft(c.body);
+                                      }}
+                                      className="text-white/35 hover:text-white"
+                                      title="编辑"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      if (confirm('删除这条评论？')) deleteComment.mutate(c.id);
+                                    }}
+                                    className="text-rose-300/50 hover:text-rose-300"
+                                    title="删除"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </span>
+                              )}
+                            </div>
+                            {isEditing ? (
+                              <div className="mt-0.5 space-y-1">
+                                <textarea
+                                  className="w-full resize-none bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1 text-[11px] text-white/80 outline-none focus:border-emerald-400/40"
+                                  value={editCommentDraft}
+                                  onChange={(e) => setEditCommentDraft(e.target.value)}
+                                  rows={2}
+                                  autoFocus
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      const body = editCommentDraft.trim();
+                                      if (!body) return;
+                                      updateComment.mutate(
+                                        { commentId: c.id, body },
+                                        {
+                                          onSuccess: () => {
+                                            setEditingCommentId(null);
+                                            flash('评论已更新');
+                                          },
+                                          onError: (err) => flash(apiError(err, '更新失败')),
+                                        },
+                                      );
+                                    }}
+                                    disabled={!editCommentDraft.trim() || updateComment.isPending}
+                                    className="liquid-btn-primary px-2 py-0.5 rounded-md text-[10px] disabled:opacity-40"
+                                  >
+                                    保存
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingCommentId(null)}
+                                    className="liquid-btn-ghost px-2 py-0.5 rounded-md text-[10px] text-white/50"
+                                  >
+                                    取消
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-white/65 leading-relaxed break-words mt-0.5">
+                                {renderCommentBody(c.body)}
+                              </p>
+                            )}
                           </div>
-                          <p className="text-[11px] text-white/65 leading-relaxed break-words mt-0.5">
-                            {renderCommentBody(c.body)}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : (
                   !commentsQ.isLoading && (
@@ -333,9 +410,7 @@ export const AISmartDetailPanel: React.FC = () => {
 
                 {/* 评论输入框 */}
                 <div className="flex gap-2 pt-1 border-t border-white/[0.05]">
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-white/10 text-white/60 flex items-center justify-center text-[10px] font-bold mt-0.5">
-                    {user?.avatar || user?.name?.slice(0, 1) || '?'}
-                  </span>
+                  <Avatar avatar={user?.avatar} name={user?.name ?? '?'} size="sm" className="mt-0.5" />
                   <textarea
                     value={commentDraft}
                     onChange={(e) => setCommentDraft(e.target.value)}

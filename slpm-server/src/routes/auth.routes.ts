@@ -12,6 +12,7 @@ import { ApiError } from '../middleware/error.js';
 import { env } from '../config/env.js';
 import { seedDemoForUser } from '../lib/seed.js';
 import { authLimiter } from '../middleware/rateLimit.js';
+import { writeAudit } from '../lib/audit.js';
 
 const router = Router();
 
@@ -157,6 +158,12 @@ router.post(
       .catch(() => {}); // 播种失败不影响注册
 
     res.status(201).json({ token, user: publicUser(user) });
+
+    // P6-C：注册审计（best-effort）
+    writeAudit(
+      { actorId: user.id, action: 'register', target: `新用户注册 ${user.email}${systemRole === 'system_admin' ? '（系统管理员）' : ''}` },
+      req,
+    ).catch(() => {});
   }),
 );
 
@@ -190,6 +197,9 @@ router.post(
 
     const token = signToken({ sub: user.id, email: user.email });
     res.json({ token, user: publicUser(user) });
+
+    // P6-C：登录审计（best-effort）
+    writeAudit({ actorId: user.id, action: 'login', target: `用户登录 ${user.email}` }, req).catch(() => {});
   }),
 );
 

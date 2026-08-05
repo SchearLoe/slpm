@@ -52,6 +52,8 @@ model User {
 
   // P3：创建的产品线
   ownedProducts Product[] @relation("ProductOwner")
+  // P6-C：审计日志（作为操作者）
+  auditLogs AuditLog[] @relation("AuditLogActor")
 }
 
 model UserSettings {
@@ -122,6 +124,24 @@ model Task {
   children   Task[]           @relation("TaskHierarchy")
   blockedBy  TaskDependency[] @relation("BlockedBy")
   blocks     TaskDependency[] @relation("Blocks")
+  // P6-B：任务清单子项（Checklist）
+  checklist TaskChecklistItem[]
+}
+
+// ============ 任务清单子项（P6-B Checklist） ============
+// 任务的可勾选子项（与 parent/children 层级不同：checklist 是轻量待办清单，完成度自动汇总）。
+
+model TaskChecklistItem {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  content   String   // 待办内容
+  done      Boolean  @default(false)
+  order     Int      @default(0) // 排序（数值小在前）
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
 }
 
 // ============ 任务评论（P1-1） ============
@@ -260,6 +280,26 @@ model Workspace {
   files     FileRecord[]
   // P1-4：工作区内产生的通知
   notifications Notification[]
+  // P6-A：工作区标签库
+  tags Tag[]
+}
+
+// ============ 标签（P6-A：工作区级标签库 + 颜色） ============
+// 工作区级标签库：统一管理标签名称与颜色，任务通过 Task.tags String[] 引用标签名。
+// 单独建表而非嵌入任务，是为了支持标签的颜色/重命名（一处改全局生效）。
+
+model Tag {
+  id          String   @id @default(cuid())
+  name        String   // 标签名（任务 tags 数组里的值即此 name）
+  color       String   @default("emerald") // 颜色 key（emerald/cyan/purple/...，前端映射色板）
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, name]) // 同一工作区内标签名唯一
+  @@index([workspaceId])
 }
 
 model WorkspaceMember {
@@ -393,6 +433,28 @@ model AiUsageRecord {
   createdAt        DateTime @default(now())
 
   @@index([userId])
+  @@index([workspaceId])
+  @@index([createdAt])
+}
+
+// ============ 审计日志（P6-C：系统级操作记录） ============
+// 记录关键安全/管理操作（登录/登出/成员变更/角色变更/产品/版本增删/AI 配置改动），
+// 供管理员在设置中心审计页查看。系统级操作（登录/系统配置）workspaceId 可空。
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String?  // 操作者（系统自动事件可为 null）
+  actor       User?    @relation("AuditLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action      String   // 动作类别（login/logout/member_invite/role_change/product_create/...）
+  target      String   // 操作目标摘要（如 "工作区 X 邀请 user@x"）
+  ip          String?  // 请求 IP（best-effort）
+  userAgent   String?  // UA 摘要
+  workspaceId String?  // 工作区上下文（系统级操作可空）
+  metadata    Json?    // 附加结构化信息（before/after 等）
+  createdAt   DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
   @@index([workspaceId])
   @@index([createdAt])
 }

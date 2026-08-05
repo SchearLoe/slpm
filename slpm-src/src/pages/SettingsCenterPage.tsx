@@ -29,8 +29,10 @@ import { api, apiError } from '@/lib/api';
 import { springSoft } from '@/lib/motion';
 import { ViewTransition } from '@/components/ui/PageTransition';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
+import { AuditLogPanel } from '@/components/dashboard/AuditLogPanel';
+import { ScrollText } from 'lucide-react';
 
-type SettingsTab = 'appearance' | 'ai' | 'notify' | 'account' | 'privacy' | 'system';
+type SettingsTab = 'appearance' | 'ai' | 'notify' | 'account' | 'privacy' | 'audit' | 'system';
 
 const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
   { id: 'appearance', label: '外观主题', icon: Palette },
@@ -38,6 +40,7 @@ const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
   { id: 'notify', label: '通知提醒', icon: Bell },
   { id: 'account', label: '账号资料', icon: User },
   { id: 'privacy', label: '安全隐私', icon: Shield },
+  { id: 'audit', label: '审计日志', icon: ScrollText },
   { id: 'system', label: '系统与数据', icon: Monitor },
 ];
 
@@ -697,6 +700,12 @@ export const SettingsCenterPage: React.FC = () => {
             </>
           )}
 
+          {tab === 'audit' && (
+            <GlassCard className="p-5 space-y-3">
+              <SectionTitle icon={ScrollText} title="操作审计日志" />
+              <AuditLogPanel />
+            </GlassCard>
+          )}
           {tab === 'system' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">

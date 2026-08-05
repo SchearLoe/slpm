@@ -31,6 +31,10 @@ const listQuerySchema = z.object({
     .enum(['需求评审', '产品设计', '开发实现', '测试验证'])
     .optional(),
   assignedToMe: z.enum(['true', 'false']).optional(),
+  // P6-A：按标签筛选（精确匹配 tags 数组中包含该值的任务）
+  tag: z.string().max(30).optional(),
+  // P6-D：批量操作前的列表 id 过滤（取指定 id 集合，用于批量预览）
+  ids: z.string().optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(100),
 });
@@ -52,6 +56,13 @@ router.get(
     if (parsed.data.status) where.status = parsed.data.status;
     if (parsed.data.phase) where.phase = parsed.data.phase;
     if (parsed.data.assignedToMe === 'true') where.assigneeId = req.user!.sub;
+    // P6-A：按标签筛选（PG 数组 has 操作符）
+    if (parsed.data.tag) where.tags = { has: parsed.data.tag };
+    // P6-D：按 id 集合筛选（逗号分隔）
+    if (parsed.data.ids) {
+      const idArr = parsed.data.ids.split(',').map((s) => s.trim()).filter(Boolean);
+      if (idArr.length > 0) where.id = { in: idArr };
+    }
 
     // P1-6：可选加载依赖关系
     const withDeps = req.query.withDeps === 'true';
@@ -76,6 +87,28 @@ router.get(
     ]);
 
     res.json({ tasks, total, page, pageSize, hasMore: page * pageSize < total });
+  }),
+);
+
+// ---- GET /api/tasks/:id —— P6-E1 单个任务详情（含依赖关系）----
+router.get(
+  '/:id',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    const task = await prisma.task.findFirst({
+      where: { id: req.params.id, workspaceId: req.workspace!.id },
+      include: {
+        assignee: { select: { id: true, name: true, avatar: true, role: true } },
+        parent: { select: { id: true, title: true, status: true } },
+        children: { select: { id: true, title: true, status: true } },
+        blockedBy: { include: { dependsOnTask: { select: { id: true, title: true, status: true } } } },
+        blocks: { include: { task: { select: { id: true, title: true, status: true } } } },
+        productVersion: { select: { id: true, name: true, status: true } },
+      },
+    });
+    if (!task) throw new ApiError(404, '任务不存在');
+    res.json({ task });
   }),
 );
 
@@ -269,6 +302,143 @@ router.delete(
   }),
 );
 
+// ---- POST /api/tasks/batch —— P6-D 批量操作（改状态/优先级/指派/删除）----
+const batchSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1, '至少选择一个任务').max(200, '一次最多操作 200 个'),
+  action: z.enum(['setStatus', 'setPriority', 'setAssignee', 'setPhase', 'delete']),
+  // 各动作的载荷（仅对应 action 必填）
+  status: z.enum(['进行中', '已完成', '待处理', '已延期']).optional(),
+  priority: z.string().optional(),
+  assigneeId: z.string().nullable().optional(),
+  phase: z.enum(['需求评审', '产品设计', '开发实现', '测试验证']).optional(),
+});
+
+router.post(
+  '/batch',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    const parsed = batchSchema.safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
+    const d = parsed.data;
+    const wsId = req.workspace!.id;
+    const ids = d.ids;
+
+    // 仅作用于当前工作区内的任务（防越权）
+    const where = { id: { in: ids }, workspaceId: wsId };
+
+    if (d.action === 'delete') {
+      const r = await prisma.task.deleteMany({ where });
+      res.json({ ok: true, affected: r.count });
+      return;
+    }
+
+    const data: Record<string, unknown> = {};
+    if (d.action === 'setStatus' && d.status) data.status = d.status;
+    else if (d.action === 'setPriority' && d.priority) data.priority = STD_PRIORITY_MAP[d.priority] ?? '中';
+    else if (d.action === 'setAssignee' && d.assigneeId !== undefined) {
+      if (d.assigneeId) {
+        // 校验目标指派人是当前工作区成员
+        const m = await prisma.workspaceMember.findUnique({
+          where: { workspaceId_userId: { workspaceId: wsId, userId: d.assigneeId } },
+          select: { userId: true },
+        });
+        if (!m) throw new ApiError(400, '目标负责人不是当前工作区成员');
+      }
+      data.assigneeId = d.assigneeId;
+    } else if (d.action === 'setPhase' && d.phase) data.phase = d.phase;
+    else throw new ApiError(400, '批量操作参数不完整');
+
+    const r = await prisma.task.updateMany({ where, data });
+    res.json({ ok: true, affected: r.count });
+  }),
+);
+
+// ==================== P6-B：任务清单（Checklist） ====================
+
+const checklistItemSchema = z.object({
+  content: z.string().min(1, '内容必填').max(500, '内容过长'),
+  done: z.boolean().optional().default(false),
+  order: z.number().int().optional(),
+});
+
+// GET /api/tasks/:taskId/checklist
+router.get(
+  '/:taskId/checklist',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    await prisma.task.findFirstOrThrow({
+      where: { id: req.params.taskId, workspaceId: req.workspace!.id },
+      select: { id: true },
+    });
+    const items = await prisma.taskChecklistItem.findMany({
+      where: { taskId: req.params.taskId },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    });
+    res.json({ items });
+  }),
+);
+
+// POST /api/tasks/:taskId/checklist
+router.post(
+  '/:taskId/checklist',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    const parsed = checklistItemSchema.safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
+    await prisma.task.findFirstOrThrow({
+      where: { id: req.params.taskId, workspaceId: req.workspace!.id },
+      select: { id: true },
+    });
+    const item = await prisma.taskChecklistItem.create({
+      data: {
+        taskId: req.params.taskId,
+        content: parsed.data.content,
+        done: parsed.data.done,
+        order: parsed.data.order ?? 0,
+      },
+    });
+    res.status(201).json({ item });
+  }),
+);
+
+// PATCH /api/tasks/:taskId/checklist/:itemId
+router.patch(
+  '/:taskId/checklist/:itemId',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    const parsed = z
+      .object({
+        content: z.string().min(1).max(500).optional(),
+        done: z.boolean().optional(),
+        order: z.number().int().optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
+    const item = await prisma.taskChecklistItem.update({
+      where: { id: req.params.itemId, taskId: req.params.taskId },
+      data: parsed.data,
+    });
+    res.json({ item });
+  }),
+);
+
+// DELETE /api/tasks/:taskId/checklist/:itemId
+router.delete(
+  '/:taskId/checklist/:itemId',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    await prisma.taskChecklistItem.delete({
+      where: { id: req.params.itemId, taskId: req.params.taskId },
+    });
+    res.json({ ok: true });
+  }),
+);
+
 // ==================== P1-1：任务评论 / 活动流 ====================
 
 // 把字段值规整为活动流文案用的字符串（deadline/数组/null 等）
@@ -341,6 +511,55 @@ router.post(
     notifyMentions(comment.taskId, req.workspace!.id, authorId, mentions, comment.body).catch(() => {});
 
     res.status(201).json({ comment });
+  }),
+);
+
+// ---- P6-E2：评论编辑 / 删除（仅作者本人）----
+
+// PATCH /api/tasks/:taskId/comments/:commentId
+router.patch(
+  '/:taskId/comments/:commentId',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    const parsed = z.object({ body: z.string().min(1, '评论内容不能为空').max(5000) }).safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
+
+    const existing = await prisma.taskComment.findFirst({
+      where: { id: req.params.commentId, taskId: req.params.taskId },
+      select: { id: true, authorId: true },
+    });
+    if (!existing) throw new ApiError(404, '评论不存在');
+    if (existing.authorId !== req.user!.sub) throw new ApiError(403, '只能编辑自己的评论');
+
+    const mentions = parseMentions(parsed.data.body);
+    const comment = await prisma.taskComment.update({
+      where: { id: existing.id },
+      data: { body: parsed.data.body, mentions },
+      include: { author: { select: { id: true, name: true, avatar: true, role: true } } },
+    });
+    res.json({ comment });
+  }),
+);
+
+// DELETE /api/tasks/:taskId/comments/:commentId
+router.delete(
+  '/:taskId/comments/:commentId',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.taskComment.findFirst({
+      where: { id: req.params.commentId, taskId: req.params.taskId },
+      select: { id: true, authorId: true },
+    });
+    if (!existing) throw new ApiError(404, '评论不存在');
+    // 作者本人可删，或工作区 admin/pm 可删他人评论（管理权限）
+    const isAuthor = existing.authorId === req.user!.sub;
+    const canModerate = req.workspace!.role === 'admin' || req.workspace!.role === 'pm';
+    if (!isAuthor && !canModerate) throw new ApiError(403, '只能删除自己的评论（管理员可删除任何评论）');
+
+    await prisma.taskComment.delete({ where: { id: existing.id } });
+    res.json({ ok: true });
   }),
 );
 

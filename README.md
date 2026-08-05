@@ -15,7 +15,7 @@ SLPM 是一个全栈项目管理系统，前端基于高保真 Liquid Glass 交�
 | 前端数据 | TanStack Query + axios · socket.io-client |
 | 前端路由 | React Router v6 |
 | 后端 | Node.js · Express · TypeScript · socket.io |
-| ORM | Prisma 5 · PostgreSQL 16（13 个迁移） |
+| ORM | Prisma 5 · PostgreSQL 16（14 个迁移） |
 | 认证 | 邮箱密码 + bcrypt + JWT · 忘记密码（重置 token） |
 | AI | OpenAI 兼容 chat/completions（流式 SSE） |
 | 文件存储 | multer 本地磁盘 · workspace 隔离 · 头像上传 |
@@ -48,6 +48,8 @@ SLPM 是一个全栈项目管理系统，前端基于高保真 Liquid Glass 交�
 | P3 | 产品线（Product→Workspace→Task 三层） · 产品版本管理 · 产品经理跨项目需求/人力视图 · PO 角色 |
 | P4-1 | 演示残留清理（假数据全部真实化） · 超级管理员初始化 · 演示数据种子 · 成员站内信 · 跨模块搜索+⌘K · 真实头像上传 |
 | P4-2 | 看板拖拽改阶段 · 任务预估工时 + 进度燃尽图 · 日程冲突预警 · 通知偏好 · 产品路线图/需求池/跨项目指派/Release Notes · 忘记密码 · 在线状态绿点 · Playwright E2E |
+| P5-1 | 安全与健壮性增强：限流/上传校验/错误边界/分页/共享枚举 |
+| P6 | 标签库（CRUD+颜色+筛选）· 任务清单 Checklist（完成度汇总）· 审计日志（系统级操作记录）· 任务批量操作 · 任务详情独立路由 · 评论编辑删除 · 筛选 URL 持久化 · 通知排序+类型筛选 · 日程导出 ICS · 知识库 Markdown 渲染 · 文件视图切换 · 看板 WIP 限制 · 统一头像组件 |
 
 ---
 
@@ -191,6 +193,19 @@ D:\VibeCode\xmgl\
 | GET | `/api/products/:id/members` | JWT+PROD | 跨项目成员负荷 |
 | GET | `/api/products/:id/stats` | JWT+PROD | 跨项目 KPI（按项目/版本分列） |
 | PATCH | `/api/products/:id/tasks/:taskId` | JWT+PROD | 产品级任务更新（跨项目指派/版本/状态） |
+| GET | `/api/tasks/:id` | JWT+WS | 单个任务详情（含依赖关系，P6-E1） |
+| POST | `/api/tasks/batch` | JWT+WS | 批量操作（改状态/优先级/指派/阶段/删除，P6-D） |
+| GET | `/api/tasks/:taskId/checklist` | JWT+WS | 任务清单子项（P6-B） |
+| POST | `/api/tasks/:taskId/checklist` | JWT+WS | 添加清单项 |
+| PATCH | `/api/tasks/:taskId/checklist/:itemId` | JWT+WS | 更新清单项（内容/完成/排序） |
+| DELETE | `/api/tasks/:taskId/checklist/:itemId` | JWT+WS | 删除清单项 |
+| PATCH | `/api/tasks/:taskId/comments/:commentId` | JWT+WS | 编辑评论（仅作者，P6-E2） |
+| DELETE | `/api/tasks/:taskId/comments/:commentId` | JWT+WS | 删除评论（作者或 admin/pm） |
+| GET | `/api/tags` | JWT+WS | 工作区标签库（P6-A） |
+| POST | `/api/tags` | JWT+WS | 新建标签（名称+颜色） |
+| PATCH | `/api/tags/:id` | JWT+WS | 重命名/改色（级联更新任务 tags） |
+| DELETE | `/api/tags/:id` | JWT+WS | 删除标签（级联移除任务 tags） |
+| GET | `/api/audit?scope=global\|workspace` | JWT | 审计日志（全局仅 system_admin，工作区需 admin/pm，P6-C） |
 
 > JWT = Bearer token · WS = X-Workspace-Id header · PROD = 产品级访问（用户至少是产品下任一项目成员） · admin = 系统管理员 · po/admin = 产品负责人或产品下任一项目 po/admin
 
@@ -214,8 +229,12 @@ Workspace ──── 工作区（名称/slug，可选归属产品线）
   ├─ WorkspaceMember  成员
   ├─ Task             任务（含 parentId / milestone / startDate / productVersionId / estimatedHours）
   ├─ TaskDependency   阻塞依赖
+  ├─ TaskChecklistItem 任务清单子项（P6-B）
   ├─ ScheduleEvent    日程
-  └─ FileRecord       文件（含 currentVersion + FileVersion）
+  ├─ FileRecord       文件（含 currentVersion + FileVersion）
+  └─ Tag              工作区标签库（P6-A：name + color）
+
+AuditLog ────── 审计日志（P6-C：actorId + action + target + ip + metadata，系统级操作可空 workspaceId）
 
 Product ──── 产品线（P3：多项目同属一条产品线）
   ├─ ownerId          产品负责人（自动拥有产品级管理权）

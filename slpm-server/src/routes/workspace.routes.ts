@@ -5,6 +5,7 @@ import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireWorkspace } from '../middleware/workspace.js';
 import { getOnlineUsersList } from '../lib/ws.js';
 import { ApiError } from '../middleware/error.js';
+import { writeAudit } from '../lib/audit.js';
 
 const router = Router();
 
@@ -153,6 +154,12 @@ router.post(
         role: membership.role as WsRole,
       },
     });
+
+    // P6-C：审计（邀请成员）
+    writeAudit(
+      { actorId: req.user!.sub, action: 'member_invite', target: `邀请 ${parsed.data.email} 加入工作区（角色 ${parsed.data.role}）`, workspaceId: req.workspace!.id },
+      req,
+    ).catch(() => {});
   }),
 );
 
@@ -174,6 +181,12 @@ router.patch(
       data: { role: parsed.data.role },
     });
     res.json({ member: { userId: membership.userId, role: membership.role as WsRole } });
+
+    // P6-C：审计（改成员角色）
+    writeAudit(
+      { actorId: req.user!.sub, action: 'role_change', target: `成员 ${req.params.userId} 角色改为 ${parsed.data.role}`, workspaceId: req.workspace!.id },
+      req,
+    ).catch(() => {});
   }),
 );
 
@@ -191,6 +204,12 @@ router.delete(
       where: { workspaceId_userId: { workspaceId: req.workspace!.id, userId: req.params.userId } },
     });
     res.json({ ok: true });
+
+    // P6-C：审计（移除成员）
+    writeAudit(
+      { actorId: req.user!.sub, action: 'member_remove', target: `移除成员 ${req.params.userId}`, workspaceId: req.workspace!.id },
+      req,
+    ).catch(() => {});
   }),
 );
 

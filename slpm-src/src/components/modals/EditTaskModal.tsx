@@ -4,6 +4,8 @@ import { Priority, TaskStatus } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
+import { TagPicker } from '@/components/modals/TagPicker';
+import { TagManageModal } from '@/components/modals/TagManageModal';
 import { motion } from 'framer-motion';
 import { useUpdateTask, useDeleteTask, useProductVersions } from '@/lib/queries';
 import { apiError } from '@/lib/api';
@@ -23,7 +25,8 @@ export const EditTaskModal: React.FC = () => {
   const [deadlineInput, setDeadlineInput] = useState('');
   const [assignee, setAssignee] = useState('');
   const [description, setDescription] = useState('');
-  const [tagsInput, setTagsInput] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagManageOpen, setTagManageOpen] = useState(false);
   const [versionId, setVersionId] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
   const [error, setError] = useState('');
@@ -39,7 +42,7 @@ export const EditTaskModal: React.FC = () => {
     );
     setAssignee(editingTask.assignee?.name || '');
     setDescription(editingTask.description);
-    setTagsInput(editingTask.tags.join(', '));
+    setTags(editingTask.tags ?? []);
     setVersionId(editingTask.productVersionId ?? '');
     setEstimatedHours(editingTask.estimatedHours != null ? String(editingTask.estimatedHours) : '');
     setError('');
@@ -61,7 +64,7 @@ export const EditTaskModal: React.FC = () => {
         status,
         deadline: deadlineInput ? new Date(deadlineInput).toISOString() : undefined,
         description,
-        tags: tagsInput.split(/[,，]/).map((t) => t.trim()).filter(Boolean),
+        tags,
         // P3：产品版本（可选）
         ...(versions.length > 0 ? { productVersionId: versionId || null } : {}),
         // P4-2：预估工时（可选；空串 → 清空）
@@ -203,7 +206,7 @@ export const EditTaskModal: React.FC = () => {
         </div>
         <div>
           <label className="block text-[11px] text-white/40 mb-1.5">标签</label>
-          <input className={field} value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} />
+          <TagPicker value={tags} onChange={setTags} onManage={() => setTagManageOpen(true)} />
         </div>
         {/* P4-2：预估工时 */}
         <div>
@@ -224,6 +227,7 @@ export const EditTaskModal: React.FC = () => {
           </div>
         )}
       </form>
+      <TagManageModal open={tagManageOpen} onClose={() => setTagManageOpen(false)} />
     </LiquidModal>
   );
 };

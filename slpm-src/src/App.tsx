@@ -11,6 +11,7 @@ import { AIAnalyticsPage } from '@/pages/AIAnalyticsPage';
 import { KnowledgeBasePage } from '@/pages/KnowledgeBasePage';
 import { SettingsCenterPage } from '@/pages/SettingsCenterPage';
 import { ProductManagementPage } from '@/pages/ProductManagementPage';
+import { TaskDetailPage } from '@/pages/TaskDetailPage';
 import { NewTaskModal } from '@/components/modals/NewTaskModal';
 import { EditTaskModal } from '@/components/modals/EditTaskModal';
 import { NavTab } from '@/types';
@@ -120,6 +121,7 @@ function MainLayout() {
               <Routes location={location}>
                 <Route path="/product" element={<ProductManagementPage />} />
                 <Route path="/tasks" element={<TaskManagementPage />} />
+                <Route path="/tasks/:id" element={<TaskDetailPage />} />
                 <Route path="/overview" element={<ProjectOverviewPage />} />
                 <Route path="/files" element={<FileDocumentsPage />} />
                 <Route path="/schedule" element={<ScheduleManagementPage />} />

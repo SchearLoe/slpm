@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
-import { TaskItem, TaskComment, TaskActivityEntry, WorkspaceMembership, WorkspaceMember, KnowledgeArticle, ArticleCategory, FileRecord, AppNotification, AiConfig, AiSuggestionResult, AiUsageSummary, WsRole, Product, ProductDetail, ProductVersion, ProductVersionStatus, ProductTaskItem, ProductMemberSummary, ProductStats } from '@/types';
+import { TaskItem, TaskComment, TaskActivityEntry, WorkspaceMembership, WorkspaceMember, KnowledgeArticle, ArticleCategory, FileRecord, AppNotification, AiConfig, AiSuggestionResult, AiUsageSummary, WsRole, Product, ProductDetail, ProductVersion, ProductVersionStatus, ProductTaskItem, ProductMemberSummary, ProductStats, Tag, TagColor, TaskChecklistItem, AuditLog } from '@/types';
 
 // ============ 任务 ============
 
@@ -13,6 +13,18 @@ export function useTasks() {
       const res = await api.get<{ tasks: TaskItem[] }>('/tasks');
       return res.data.tasks;
     },
+  });
+}
+
+// P6-E1：单个任务详情（独立路由页用，含依赖关系）
+export function useTask(id: string | undefined) {
+  return useQuery({
+    queryKey: ['task', id],
+    queryFn: async () => {
+      const res = await api.get<{ task: TaskItem }>(`/tasks/${id}`);
+      return res.data.task;
+    },
+    enabled: !!id,
   });
 }
 
@@ -171,6 +183,36 @@ export function useCreateComment(taskId: string | undefined) {
     mutationFn: async (body: string) => {
       const res = await api.post<{ comment: TaskComment }>(`/tasks/${taskId}/comments`, { body });
       return res.data.comment;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['comments', taskId] });
+      qc.invalidateQueries({ queryKey: ['activity', taskId] });
+    },
+  });
+}
+
+// P6-E2：编辑评论（仅作者）
+export function useUpdateComment(taskId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ commentId, body }: { commentId: string; body: string }) => {
+      const res = await api.patch<{ comment: TaskComment }>(`/tasks/${taskId}/comments/${commentId}`, { body });
+      return res.data.comment;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['comments', taskId] });
+      qc.invalidateQueries({ queryKey: ['activity', taskId] });
+    },
+  });
+}
+
+// P6-E2：删除评论（作者或 admin/pm）
+export function useDeleteComment(taskId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (commentId: string) => {
+      await api.delete(`/tasks/${taskId}/comments/${commentId}`);
+      return commentId;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['comments', taskId] });
@@ -941,4 +983,150 @@ export async function streamAiSuggest(
     }
   }
   return { confidence };
+}
+
+// ==================== P6-A：工作区标签库 ====================
+
+const TAGS_KEY = ['tags'] as const;
+
+export function useTags() {
+  return useQuery({
+    queryKey: TAGS_KEY,
+    queryFn: async () => {
+      const res = await api.get<{ tags: Tag[] }>('/tags');
+      return res.data.tags;
+    },
+  });
+}
+
+export function useCreateTag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { name: string; color?: TagColor }) => {
+      const res = await api.post<{ tag: Tag }>('/tags', input);
+      return res.data.tag;
+    },
+    onSuccess: (tag) => {
+      qc.setQueryData<Tag[]>(TAGS_KEY, (old) => [...(old ?? []), tag]);
+    },
+  });
+}
+
+export function useUpdateTag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string } & Partial<Pick<Tag, 'name' | 'color'>>) => {
+      const res = await api.patch<{ tag: Tag }>(`/tags/${id}`, updates);
+      return res.data.tag;
+    },
+    onSuccess: (tag) => {
+      qc.setQueryData<Tag[]>(TAGS_KEY, (old) => (old ?? []).map((t) => (t.id === tag.id ? tag : t)));
+      // 标签重命名会影响任务 tags，需刷新任务列表
+      qc.invalidateQueries({ queryKey: TASKS_KEY });
+    },
+  });
+}
+
+export function useDeleteTag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/tags/${id}`);
+      return id;
+    },
+    onSuccess: (id) => {
+      qc.setQueryData<Tag[]>(TAGS_KEY, (old) => (old ?? []).filter((t) => t.id !== id));
+      qc.invalidateQueries({ queryKey: TASKS_KEY });
+    },
+  });
+}
+
+// ==================== P6-B：任务清单（Checklist） ====================
+
+export function useChecklist(taskId: string | undefined) {
+  return useQuery({
+    queryKey: ['checklist', taskId],
+    queryFn: async () => {
+      const res = await api.get<{ items: TaskChecklistItem[] }>(`/tasks/${taskId}/checklist`);
+      return res.data.items;
+    },
+    enabled: !!taskId,
+  });
+}
+
+export function useAddChecklistItem(taskId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (content: string) => {
+      const res = await api.post<{ item: TaskChecklistItem }>(`/tasks/${taskId}/checklist`, { content });
+      return res.data.item;
+    },
+    onSuccess: (item) => {
+      qc.setQueryData<TaskChecklistItem[]>(['checklist', taskId], (old) => [...(old ?? []), item]);
+    },
+  });
+}
+
+export function useUpdateChecklistItem(taskId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, ...updates }: { itemId: string } & Partial<Pick<TaskChecklistItem, 'content' | 'done' | 'order'>>) => {
+      const res = await api.patch<{ item: TaskChecklistItem }>(`/tasks/${taskId}/checklist/${itemId}`, updates);
+      return res.data.item;
+    },
+    onSuccess: (item) => {
+      qc.setQueryData<TaskChecklistItem[]>(['checklist', taskId], (old) => (old ?? []).map((i) => (i.id === item.id ? item : i)));
+    },
+  });
+}
+
+export function useDeleteChecklistItem(taskId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (itemId: string) => {
+      await api.delete(`/tasks/${taskId}/checklist/${itemId}`);
+      return itemId;
+    },
+    onSuccess: (itemId) => {
+      qc.setQueryData<TaskChecklistItem[]>(['checklist', taskId], (old) => (old ?? []).filter((i) => i.id !== itemId));
+    },
+  });
+}
+
+// ==================== P6-D：批量任务操作 ====================
+
+export type BatchAction = 'setStatus' | 'setPriority' | 'setAssignee' | 'setPhase' | 'delete';
+
+export function useBatchTasks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      ids: string[];
+      action: BatchAction;
+      status?: TaskItem['status'];
+      priority?: string;
+      assigneeId?: string | null;
+      phase?: TaskItem['phase'];
+    }) => {
+      const res = await api.post<{ ok: boolean; affected: number }>('/tasks/batch', input);
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: TASKS_KEY });
+    },
+  });
+}
+
+// ==================== P6-C：审计日志 ====================
+
+export function useAuditLogs(scope: 'global' | 'workspace', params?: { action?: string; page?: number }) {
+  return useQuery({
+    queryKey: ['audit', scope, params],
+    queryFn: async () => {
+      const res = await api.get<{ logs: AuditLog[]; total: number; page: number; pageSize: number; hasMore: boolean }>('/audit', {
+        params: { scope, ...params },
+      });
+      return res.data;
+    },
+  });
 }

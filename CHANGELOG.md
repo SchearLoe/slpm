@@ -4,7 +4,55 @@
 
 ---
 
-## 2026-08-05
+## 2026-08-05（续）
+
+### P6：标签库 + 任务清单 + 审计日志 + 批量操作 + 多项体验增强
+
+**数据模型（1 迁移，3 新表）**
+- 新增 `Tag` 模型（工作区级标签库：name + color + 唯一约束 `[workspaceId, name]`）
+- 新增 `TaskChecklistItem` 模型（任务清单子项：content + done + order）
+- 新增 `AuditLog` 模型（系统级操作审计：actorId + action + target + ip + userAgent + metadata）
+
+**P6-A：标签管理系统**
+- 后端 `tag.routes.ts`：标签 CRUD（创建/列表/重命名/改色/删除）；重命名与删除级联更新所有任务的 `tags` 数组（事务）
+- 后端 `task.routes.ts`：列表查询支持 `?tag=` 筛选（PG 数组 `has` 操作符）
+- 前端 `TagPicker`（任务表单内）：已有标签点选 + 自定义新标签；彩色 chip 展示
+- 前端 `TagManageModal`：标签库管理弹窗（颜色色板 9 色、内联重命名/改色/删除）
+- 前端 `NewTaskModal` / `EditTaskModal`：标签输入从逗号分隔文本框升级为 TagPicker
+- 前端 `TaskGroupList`：看板工具栏新增**标签筛选下拉**；任务卡片显示**标签 chip**（最多 4 个 + 折叠计数）
+- 前端 `lib/tagColors.ts`：颜色 → Tailwind 类映射集中管理
+
+**P6-B：任务清单 / Checklist**
+- 后端 `task.routes.ts`：checklist CRUD（GET/POST 列表与创建；PATCH/DELETE 单项）
+- 前端 `TaskChecklist` 组件：可勾选子项列表 + **完成度进度条**（SVG 渐变）+ 双击编辑 + 增删
+- 集成到 `AISmartDetailPanel`（活动流之上）
+
+**P6-C：审计日志系统**
+- 后端 `lib/audit.ts`：`writeAudit()` 辅助（best-effort，记录 IP/UA，失败不影响主流程）
+- 后端 `audit.routes.ts`：`GET /api/audit?scope=global|workspace`（全局仅 system_admin；工作区需 admin/pm）
+- 审计埋点：登录（login）、注册（register）、邀请成员（member_invite）、改角色（role_change）、移除成员（member_remove）
+- 前端 `AuditLogPanel`：设置中心新增「审计日志」Tab；动作徽章着色（13 种动作）+ 类型筛选 + 全局/工作区视图切换
+- 前端 `useAuditLogs` hook
+
+**P6-D：任务批量操作**
+- 后端 `task.routes.ts`：`POST /api/tasks/batch`（setStatus/setPriority/setAssignee/setPhase/delete；限 200 条；越权指派拦截）
+- 前端 `TaskGroupList`：**批量选择模式**（多选 + 全选/取消全选）+ 批量操作工具条（完成/进行中/高优/删除）
+
+**P6-E：10 项功能完善补全**
+- **E1 任务详情独立路由**：`/tasks/:id`（后端 `GET /api/tasks/:id` 含依赖关系；前端 `TaskDetailPage` 复用详情面板；通知 deep-link 升级为精确跳转）
+- **E2 评论编辑/删除**：后端 PATCH/DELETE `/tasks/:taskId/comments/:commentId`（作者可编辑；作者或 admin/pm 可删除）；前端评论 hover 显示编辑/删除按钮 + 内联编辑
+- **E3 任务筛选 URL 持久化**：TaskGroupList 的 tab/status/tag 筛选同步到 URL query（刷新/分享链接保持筛选）
+- **E4 通知中心增强**：未读优先排序 + 类型筛选（@提及/指派/系统）下拉
+- **E5 日程导出 ICS**：当前月份日程一键导出为 `.ics`（兼容 Outlook/Apple/Google 日历，含 UID/时间/地点/参会人）
+- **E6 知识库 Markdown 渲染**：零依赖轻量 Markdown 渲染器（标题/列表/代码/引用/链接/粗体）+ 自动提取标题目录
+- **E7 文件视图切换**：网格/列表视图切换（localStorage 持久化偏好）
+- **E8 看板 WIP 限制提示**：阶段组进行中任务超阈值（>6）显示琥珀色警示徽章
+- **E9 头像 fallback 统一**：`Avatar` 组件统一处理「图片路径 vs 首字母」+ 加载失败回退 + 在线绿点（评论/活动流/审计日志全部替换）
+- **E10 全局校验**：前后端 tsc 零错误；全流程 API 冒烟通过
+
+**验证**：前后端 tsc 零错误；API 全流程冒烟通过（标签创建+筛选、任务单查、checklist 增删改、评论编辑删除、批量操作 affected=2、审计权限 403 拦截、ICS 导出）。
+
+### P4-2（续）：忘记密码 + 在线状态 + Playwright E2E 冒烟套件
 
 ### P4-2（续）：忘记密码 + 在线状态 + Playwright E2E 冒烟套件
 

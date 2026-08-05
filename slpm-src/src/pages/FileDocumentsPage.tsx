@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { FileText, Search, UploadCloud, Download, Eye, Share2, MoreHorizontal, Paperclip, Pencil, Check, X } from 'lucide-react';
+import { FileText, Search, UploadCloud, Download, Eye, Share2, MoreHorizontal, Paperclip, Pencil, Check, X, LayoutGrid, List as ListIcon } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
@@ -29,6 +29,12 @@ export const FileDocumentsPage: React.FC = () => {
 
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
+  // P6-E7：网格/列表视图切换（localStorage 持久化）
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => (localStorage.getItem('slpm_file_view') as 'grid' | 'list') || 'grid');
+  const switchView = (m: 'grid' | 'list') => {
+    setViewMode(m);
+    localStorage.setItem('slpm_file_view', m);
+  };
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -161,6 +167,23 @@ export const FileDocumentsPage: React.FC = () => {
             className="liquid-pill w-full h-9 pl-9 pr-3 text-[12px] text-white placeholder:text-white/30 bg-transparent outline-none"
           />
         </div>
+        {/* P6-E7：网格/列表视图切换 */}
+        <div className="liquid-pill p-1 flex items-center gap-0.5 shrink-0">
+          <button
+            onClick={() => switchView('grid')}
+            className={`w-7 h-7 rounded-md flex items-center justify-center ${viewMode === 'grid' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'}`}
+            title="网格视图"
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => switchView('list')}
+            className={`w-7 h-7 rounded-md flex items-center justify-center ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'}`}
+            title="列表视图"
+          >
+            <ListIcon className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -168,9 +191,9 @@ export const FileDocumentsPage: React.FC = () => {
           <div className="py-16 text-center text-[12px] text-white/35">加载中…</div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+            <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5' : 'flex flex-col gap-2'}>
               {filteredFiles.map((file) => (
-                <GlassCard key={file.id} variant="interactive" className="p-5 space-y-4 flex flex-col justify-between relative">
+                <GlassCard key={file.id} variant="interactive" className={viewMode === 'grid' ? 'p-5 space-y-4 flex flex-col justify-between relative' : 'p-3 flex items-center gap-3 relative'}>
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">
                       <div className="liquid-icon-well w-10 h-10 rounded-xl flex items-center justify-center text-emerald-300">

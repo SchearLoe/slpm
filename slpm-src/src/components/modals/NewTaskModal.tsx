@@ -3,6 +3,8 @@ import { Plus, CheckCircle2, Sparkles } from 'lucide-react';
 import { Priority, TaskItem } from '@/types';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
+import { TagPicker } from '@/components/modals/TagPicker';
+import { TagManageModal } from '@/components/modals/TagManageModal';
 import { motion } from 'framer-motion';
 import { useCreateTask, useProductVersions } from '@/lib/queries';
 import { useAuth } from '@/context/AuthContext';
@@ -30,7 +32,8 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
   const [priority, setPriority] = useState<Priority>('高');
   const [deadline, setDeadline] = useState('');
   const [description, setDescription] = useState('');
-  const [tagsInput, setTagsInput] = useState('评审, 需求, 关键路径');
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagManageOpen, setTagManageOpen] = useState(false);
   const [versionId, setVersionId] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
   const [error, setError] = useState('');
@@ -53,7 +56,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
       priority,
       status: '进行中',
       description: description || '暂无详细描述信息。',
-      tags: tagsInput.split(/[,，]/).map((t) => t.trim()).filter(Boolean),
+      tags,
     };
     // 截止时间转 ISO；后端期望 datetime 字符串
     if (deadlineInput) {
@@ -76,6 +79,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
       }
       setTitle('');
       setDescription('');
+      setTags([]);
       setVersionId('');
       setEstimatedHours('');
       onCreated?.(task);
@@ -200,8 +204,8 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
         </div>
 
         <div>
-          <label className="block text-[11px] text-white/40 mb-1.5">标签（逗号分隔）</label>
-          <input className={field} value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} />
+          <label className="block text-[11px] text-white/40 mb-1.5">标签</label>
+          <TagPicker value={tags} onChange={setTags} onManage={() => setTagManageOpen(true)} />
         </div>
 
         {error && (
@@ -215,6 +219,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
           <span>任务将保存到数据库，刷新页面数据不丢失。</span>
         </div>
       </form>
+      <TagManageModal open={tagManageOpen} onClose={() => setTagManageOpen(false)} />
     </LiquidModal>
   );
 };

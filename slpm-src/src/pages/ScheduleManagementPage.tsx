@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  Download,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
@@ -20,6 +21,45 @@ import { ViewTransition } from '@/components/ui/PageTransition';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { useSchedules, useCreateSchedule, useUpdateSchedule, useDeleteSchedule, ScheduleEvent as ApiEvent } from '@/lib/queries';
 import { apiError } from '@/lib/api';
+
+// P6-E5：生成 ICS（iCalendar）文件并触发下载，兼容 Outlook/Apple/Google 日历
+function exportICS(events: ApiEvent[], filename: string) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  // ICS 时间格式：YYYYMMDDTHHMMSSZ（UTC）
+  const fmt = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+  };
+  // 转义 ICS 文本中的特殊字符
+  const esc = (s: string) => s.replace(/([\\,;])/g, '\\$1').replace(/\n/g, '\\n');
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//SLPM//Schedule//CN',
+    'CALSCALE:GREGORIAN',
+    ...events.flatMap((e) => [
+      'BEGIN:VEVENT',
+      `UID:${e.id}@slpm`,
+      `DTSTAMP:${fmt(new Date().toISOString())}`,
+      `DTSTART:${fmt(e.startTime)}`,
+      `DTEND:${fmt(e.endTime)}`,
+      `SUMMARY:${esc(e.title)}`,
+      e.location ? `LOCATION:${esc(e.location)}` : '',
+      e.attendees.length > 0 ? `ATTENDEE:${esc(e.attendees.join(','))}` : '',
+      `DESCRIPTION:优先级:${e.priority}`,
+      'END:VEVENT',
+    ]).filter(Boolean),
+    'END:VCALENDAR',
+  ];
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -229,6 +269,23 @@ export const ScheduleManagementPage: React.FC = () => {
               { value: '低', label: '低' },
             ]}
           />
+
+          <button
+            onClick={() => {
+              if (events.length === 0) {
+                show('当前月份暂无日程可导出');
+                return;
+              }
+              exportICS(events, `slpm-日程-${monthStr}.ics`);
+              show(`已导出 ${events.length} 条日程为 ICS（可导入 Outlook/Apple/Google 日历）`);
+            }}
+            disabled={events.length === 0}
+            className="h-9 px-3 rounded-full liquid-btn-ghost text-[12px] text-white/60 flex items-center gap-1.5 whitespace-nowrap disabled:opacity-40"
+            title="导出当前月份日程为 ICS"
+          >
+            <Download className="w-3.5 h-3.5" />
+            导出 ICS
+          </button>
 
           <button
             onClick={() => openCreate()}

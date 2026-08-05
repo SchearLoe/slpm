@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Bell, CheckCheck, Trash2, AlertTriangle, UserPlus, AtSign } from 'lucide-react';
 import { LiquidModal } from '@/components/ui/LiquidModal';
+import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { motion } from 'framer-motion';
 import { AppNotification, NotificationType } from '@/types';
 import {
@@ -58,12 +59,22 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ open, on
   const clearRead = useClearReadNotifications();
 
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  // P6-E4：类型筛选
+  const [typeFilter, setTypeFilter] = useState<'all' | AppNotification['type']>('all');
 
   const { currentWorkspace, setCurrentWorkspace, setSelectedTask } = useApp();
   const navigate = useNavigate();
 
   const unread = notifications.filter((n) => !n.read).length;
-  const visible = filter === 'unread' ? notifications.filter((n) => !n.read) : notifications;
+  // P6-E4：未读优先排序（未读在前，同状态按时间倒序）+ 类型筛选
+  const visible = notifications
+    .filter((n) => (filter === 'unread' ? !n.read : true))
+    .filter((n) => (typeFilter === 'all' ? true : n.type === typeFilter))
+    .slice()
+    .sort((a, b) => {
+      if (a.read !== b.read) return a.read ? -1 : 1; // 未读优先
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
   const handleMarkAllRead = () => {
     markAllRead.mutate();
@@ -73,7 +84,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ open, on
     clearRead.mutate();
   };
 
-  // 点击单条：标记已读；带 taskId 的跳转到任务页（必要时先切到通知所属工作区）
+  // 点击单条：标记已读；带 taskId 的跳转到任务详情页（必要时先切到通知所属工作区）
   const handleClick = (n: AppNotification) => {
     if (!n.read) markRead.mutate(n.id);
     if (!n.taskId) return;
@@ -81,10 +92,10 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ open, on
     if (currentWorkspace && n.workspaceId && currentWorkspace.id !== n.workspaceId) {
       setCurrentWorkspace(n.workspaceId);
     }
-    // 清空当前选区，跳到任务页（用户在列表里继续点开该任务）
+    // P6-E1：直接跳到任务详情独立页（精确 deep-link）
     setSelectedTask(null);
     onClose();
-    navigate('/tasks');
+    navigate(`/tasks/${n.taskId}`);
   };
 
   return (
@@ -117,21 +128,38 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ open, on
       }
     >
       <div className="space-y-3">
-        <div className="liquid-pill p-1 inline-flex items-center gap-0.5">
-          {([
-            ['all', '全部'],
-            ['unread', '未读'],
-          ] as const).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setFilter(id)}
-              className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-                filter === id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="liquid-pill p-1 inline-flex items-center gap-0.5">
+            {([
+              ['all', '全部'],
+              ['unread', '未读'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setFilter(id)}
+                className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                  filter === id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {/* P6-E4：类型筛选 */}
+          <div className="ml-auto">
+            <LiquidSelect
+              variant="pill"
+              value={typeFilter}
+              onChange={(v) => setTypeFilter(v as typeof typeFilter)}
+              aria-label="类型筛选"
+              options={[
+                { value: 'all', label: '全部类型' },
+                { value: 'mention', label: '@ 提及' },
+                { value: 'assign', label: '任务指派' },
+                { value: 'system', label: '系统通知' },
+              ]}
+            />
+          </div>
         </div>
 
         <div className="space-y-2 max-h-[360px] overflow-y-auto pr-0.5">

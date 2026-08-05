@@ -3,11 +3,22 @@ import { BookOpen, Search, Folder, FileText, Star, ChevronRight, Plus, Share2, B
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
+import { Markdown } from '@/components/ui/Markdown';
 import { QueryError } from '@/components/QueryError';
 import { useToast } from '@/components/ui/Toast';
 import { useArticles, useCreateArticle, useToggleArticleStar } from '@/lib/queries';
 import { apiError } from '@/lib/api';
 import { ArticleCategory, KnowledgeArticle } from '@/types';
+
+// P6-E6：从 markdown 正文提取标题（h1-h3）作为目录
+function extractToc(body: string): { level: number; text: string }[] {
+  const toc: { level: number; text: string }[] = [];
+  for (const line of body.split('\n')) {
+    const m = /^(#{1,3})\s+(.*)$/.exec(line.trim());
+    if (m) toc.push({ level: m[1].length, text: m[2].trim() });
+  }
+  return toc;
+}
 
 // 浏览量格式化：≥1000 显示为 1.2k，与原 demo 的 '2.4k' 风格一致
 function formatViews(n: number): string {
@@ -219,8 +230,22 @@ export const KnowledgeBasePage: React.FC = () => {
           </div>
         }
       >
-        <div className="space-y-3 text-[13px] text-white/65 leading-relaxed">
-          <p className="whitespace-pre-wrap">{openArticle?.body || '暂无正文，待补充。'}</p>
+        <div className="space-y-3 text-[13px] text-white/65 leading-relaxed max-h-[60vh] overflow-y-auto pr-1">
+          {/* P6-E6：自动提取标题作为目录 */}
+          {openArticle && extractToc(openArticle.body).length > 0 && (
+            <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+              <div className="text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wide">目录</div>
+              <ul className="space-y-0.5">
+                {extractToc(openArticle.body).map((h, idx) => (
+                  <li key={idx} className="text-[11px] text-white/55 hover:text-emerald-300 cursor-default truncate" style={{ paddingLeft: `${(h.level - 1) * 12}px` }}>
+                    {h.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* P6-E6：Markdown 渲染（支持标题/列表/代码/链接/粗体等） */}
+          {openArticle ? <Markdown content={openArticle.body || '暂无正文，待补充。'} /> : null}
           <p className="text-[11px] text-white/35">浏览量 {openArticle ? formatViews(openArticle.views) : 0} · 由 {openArticle?.author.name} 发布</p>
         </div>
       </LiquidModal>
