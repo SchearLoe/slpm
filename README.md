@@ -42,6 +42,9 @@ SLPM 是一个全栈项目管理系统，前端基于高保真 Liquid Glass 交�
 | P1-4 | 真实 AI · system_admin 全局配置 · OpenAI 代理 |
 | P1-5 | 文件预览（图片/PDF） · AI 流式 SSE · Token 统计 |
 | P1-6 | 甘特图（数据驱动） · 任务依赖（父子/阻塞） · WebSocket 实时推送 · 文件版本历史 |
+| P2-1 | 职能角色（PM/Dev/QA） · 角色化导航与着陆页 · 默认任务筛选 |
+| P2-2 | 角色只读行为 · PM 截止日预警 + 成员负荷真实化 |
+| P3 | 产品线（Product→Workspace→Task 三层） · 产品版本管理 · 产品经理跨项目需求/人力视图 · PO 角色 |
 
 ---
 
@@ -147,8 +150,21 @@ D:\VibeCode\xmgl\
 | GET | `/api/notifications/unread-count` | JWT | 未读数 |
 | PATCH | `/api/notifications/:id/read` | JWT | 已读 |
 | POST | `/api/notifications/read-all` | JWT | 全部已读 |
+| GET | `/api/products` | JWT | 产品线列表（含计数与最高角色） |
+| POST | `/api/products` | JWT+admin | 新建产品线 |
+| GET | `/api/products/:id` | JWT+PROD | 产品详情（含关联项目） |
+| PATCH | `/api/products/:id` | JWT+PROD+po/admin | 更新产品 |
+| POST | `/api/products/:id/workspaces` | JWT+PROD+po/admin | 关联项目到产品线 |
+| DELETE | `/api/products/:id/workspaces/:wsId` | JWT+PROD+po/admin | 取消关联 |
+| GET | `/api/products/:id/versions` | JWT+PROD | 版本列表 |
+| POST | `/api/products/:id/versions` | JWT+PROD+po/admin | 创建版本 |
+| PATCH | `/api/products/:id/versions/:vid` | JWT+PROD+po/admin | 更新版本 |
+| DELETE | `/api/products/:id/versions/:vid` | JWT+PROD+po/admin | 删除版本 |
+| GET | `/api/products/:id/tasks` | JWT+PROD | 跨项目任务（筛选聚合） |
+| GET | `/api/products/:id/members` | JWT+PROD | 跨项目成员负荷 |
+| GET | `/api/products/:id/stats` | JWT+PROD | 跨项目 KPI（按项目/版本分列） |
 
-> JWT = Bearer token · WS = X-Workspace-Id header · admin = 系统管理员
+> JWT = Bearer token · WS = X-Workspace-Id header · PROD = 产品级访问（用户至少是产品下任一项目成员） · admin = 系统管理员 · po/admin = 产品负责人或产品下任一项目 po/admin
 
 
 ## 数据库 Schema
@@ -165,12 +181,17 @@ User ────────── 用户（邮箱/密码/角色 system_admin|�
   ├─ Notification    站内通知
   └─ AiUsageRecord   Token 用量
 
-Workspace ──── 工作区（名称/slug）
+Workspace ──── 工作区（名称/slug，可选归属产品线）
   ├─ WorkspaceMember  成员
-  ├─ Task             任务（含 parentId / milestone / startDate）
+  ├─ Task             任务（含 parentId / milestone / startDate / productVersionId）
   ├─ TaskDependency   阻塞依赖
   ├─ ScheduleEvent    日程
   └─ FileRecord       文件（含 currentVersion + FileVersion）
+
+Product ──── 产品线（P3：多项目同属一条产品线）
+  ├─ ownerId          产品负责人（自动拥有产品级管理权）
+  ├─ Workspace[]      关联的项目（工作区）
+  └─ ProductVersion[] 版本（planning→in_progress→released→archived）
 
 SystemConfig ── 全局单例（AI baseURL/加密Key/model/temperature）
 ```
@@ -181,7 +202,8 @@ SystemConfig ── 全局单例（AI baseURL/加密Key/model/temperature）
 | 决策 | 方案 |
 |------|------|
 | 工作区隔离 | `X-Workspace-Id` HTTP header（不进 JWT，切换无需重登录） |
-| RBAC | WorkspaceMember.role = admin\|member；全局 system_admin 管理 AI 配置 |
+| RBAC | WorkspaceMember.role = admin\|pm\|dev\|qa\|po；全局 system_admin 管理 AI 配置 |
+| 产品层级 | Product（产品线）→ Workspace（项目）→ Task；产品级视图按"产品负责人/任一项目 po-admin"授权 |
 | API 密钥安全 | AES-256-GCM 加密存储，前端只返回掩码 `••••abcd` |
 | 文件存储 | multer diskStorage → `uploads/<workspaceId>/<uuid>.<ext>`，可平滑迁移 S3 |
 | 实时推送 | socket.io · JWT 握手认证 · workspace 房间 · 通知创建即推送 |

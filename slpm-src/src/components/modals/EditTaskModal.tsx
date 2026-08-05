@@ -5,13 +5,17 @@ import { useApp } from '@/context/AppContext';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { motion } from 'framer-motion';
-import { useUpdateTask, useDeleteTask } from '@/lib/queries';
+import { useUpdateTask, useDeleteTask, useProductVersions } from '@/lib/queries';
 import { apiError } from '@/lib/api';
 
 export const EditTaskModal: React.FC = () => {
-  const { editingTask, setEditingTask, setSelectedTask } = useApp();
+  const { editingTask, setEditingTask, setSelectedTask, currentWorkspace, products } = useApp();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  // P3：当前工作区所属产品线的版本列表
+  const productId = currentWorkspace?.productId ?? null;
+  const { data: versions = [] } = useProductVersions(productId ?? undefined);
+  const currentProduct = products.find((p) => p.id === productId);
   const [title, setTitle] = useState('');
   const [phase, setPhase] = useState<'需求评审' | '产品设计' | '开发实现' | '测试验证'>('需求评审');
   const [priority, setPriority] = useState<Priority>('高');
@@ -20,6 +24,7 @@ export const EditTaskModal: React.FC = () => {
   const [assignee, setAssignee] = useState('');
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('');
+  const [versionId, setVersionId] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -34,6 +39,7 @@ export const EditTaskModal: React.FC = () => {
     setAssignee(editingTask.assignee?.name || '');
     setDescription(editingTask.description);
     setTagsInput(editingTask.tags.join(', '));
+    setVersionId(editingTask.productVersionId ?? '');
     setError('');
   }, [editingTask]);
 
@@ -54,6 +60,8 @@ export const EditTaskModal: React.FC = () => {
         deadline: deadlineInput ? new Date(deadlineInput).toISOString() : undefined,
         description,
         tags: tagsInput.split(/[,，]/).map((t) => t.trim()).filter(Boolean),
+        // P3：产品版本（可选）
+        ...(versions.length > 0 ? { productVersionId: versionId || null } : {}),
       });
       setSelectedTask(task); // 同步右侧详情
       setEditingTask(null);
@@ -173,6 +181,18 @@ export const EditTaskModal: React.FC = () => {
             />
           </div>
         </div>
+        {/* P3：产品版本（当前工作区归属产品线且有版本时显示） */}
+        {versions.length > 0 && (
+          <div>
+            <label className="block text-[11px] text-white/40 mb-1.5">所属版本（{currentProduct?.name ?? '产品线'}）</label>
+            <LiquidSelect
+              value={versionId}
+              onChange={setVersionId}
+              placeholder="不关联版本"
+              options={[{ value: '', label: '不关联版本' }, ...versions.map((v) => ({ value: v.id, label: v.name }))]}
+            />
+          </div>
+        )}
         <div>
           <label className="block text-[11px] text-white/40 mb-1.5">详细描述</label>
           <textarea className={`${field} resize-none`} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />

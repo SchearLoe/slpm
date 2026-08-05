@@ -35,7 +35,7 @@ function publicUser(u: {
   memberships?: {
     id: string;
     role: string;
-    workspace: { id: string; name: string; slug: string };
+    workspace: { id: string; name: string; slug: string; productId: string | null };
   }[];
 }) {
   // settings 可能未 include（旧调用方）或为 null（用户先于设置记录创建）
@@ -53,12 +53,13 @@ function publicUser(u: {
           enableConfetti: s.enableConfetti,
         }
       : { ...DEFAULT_SETTINGS },
-    // P1-2：返回用户所属的工作区列表（含每条的角色）
+    // P1-2：返回用户所属的工作区列表（含每条的角色；P3 加产品线归属）
     workspaces: (u.memberships ?? []).map((m) => ({
       id: m.workspace.id,
       name: m.workspace.name,
       slug: m.workspace.slug,
-      role: m.role as 'admin' | 'member',
+      productId: m.workspace.productId, // P3：所属产品线（可空）
+      role: m.role as 'admin' | 'pm' | 'dev' | 'qa' | 'po',
     })),
   };
 }
@@ -112,7 +113,7 @@ router.post(
       },
       include: {
         settings: true,
-        memberships: { include: { workspace: { select: { id: true, name: true, slug: true } } } },
+        memberships: { include: { workspace: { select: { id: true, name: true, slug: true, productId: true } } } },
       },
     });
 
@@ -140,7 +141,7 @@ router.post(
       where: { email },
       include: {
         settings: true,
-        memberships: { include: { workspace: { select: { id: true, name: true, slug: true } } } },
+        memberships: { include: { workspace: { select: { id: true, name: true, slug: true, productId: true } } } },
       },
     });
     if (!user) throw new ApiError(401, '邮箱或密码错误');
@@ -162,7 +163,7 @@ router.get(
       where: { id: req.user!.sub },
       include: {
         settings: true,
-        memberships: { include: { workspace: { select: { id: true, name: true, slug: true } } } },
+        memberships: { include: { workspace: { select: { id: true, name: true, slug: true, productId: true } } } },
       },
     });
     if (!user) throw new ApiError(404, '用户不存在');

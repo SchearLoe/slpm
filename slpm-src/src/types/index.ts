@@ -6,10 +6,11 @@ export type NavTab =
   | 'collaboration'
   | 'analytics'
   | 'knowledge'
-  | 'settings';
+  | 'settings'
+  | 'product'; // P3：产品管理（产品线聚合视图）
 
-// P2-1：职能角色
-export type WsRole = 'admin' | 'pm' | 'dev' | 'qa';
+// P2-1：职能角色（P3 新增 po=产品经理）
+export type WsRole = 'admin' | 'pm' | 'dev' | 'qa' | 'po';
 
 export type Priority = '高' | '中' | '低' | '高优先级' | '紧急';
 export type TaskStatus = '进行中' | '已完成' | '待处理' | '已延期';
@@ -40,6 +41,7 @@ export interface WorkspaceMembership {
   name: string;
   slug: string;
   role: WsRole;
+  productId?: string | null; // P3：所属产品线（可空）
 }
 
 export interface WorkspaceMember {
@@ -79,6 +81,9 @@ export interface TaskItem {
   blocks?: { task: { id: string; title: string; status: string } }[];
   startDate?: string | null; // ISO，甘特起始日
   milestone?: boolean;
+  // P3：所属产品版本
+  productVersionId?: string | null;
+  productVersion?: { id: string; name: string; status: string } | null;
   project: string; // 旧 demo 字段，后端暂不持久化
   deadline: string; // 后端 ISO；旧 demo "2025-05-24 18:00"
   description: string;
@@ -249,4 +254,105 @@ export interface AiUsageSummary {
   completionTokens: number;
   count: number;
   byDay: { date: string; tokens: number }[];
+}
+
+// ============ 产品线 / 版本（P3） ============
+// 层级：Product（产品线）→ Workspace（项目）→ Task
+
+export interface Product {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  workspaceCount: number;
+  versionCount: number;
+  // 当前用户在该产品线下的最高角色（决定产品页写权限）
+  role: WsRole | null;
+}
+
+// 产品详情（含关联工作区 + 当前用户在每个工作区的角色）
+export interface ProductWorkspaceLink {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  role: WsRole | null; // null = 非我所属的工作区（别人关联进来的）
+}
+
+export interface ProductDetail {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  versionCount: number;
+  role: WsRole | null;
+  workspaces: ProductWorkspaceLink[];
+}
+
+// 产品版本
+export type ProductVersionStatus = 'planning' | 'in_progress' | 'released' | 'archived';
+
+export interface ProductVersion {
+  id: string;
+  name: string;
+  description: string;
+  status: ProductVersionStatus;
+  startDate: string | null;
+  releaseDate: string | null;
+  order: number;
+  taskCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 跨工作区任务（产品视图用，额外带 workspace / productVersion）
+export interface ProductTaskItem extends TaskItem {
+  workspace?: { id: string; name: string };
+  productVersion?: { id: string; name: string; status: string } | null;
+}
+
+// 跨工作区成员负荷聚合
+export interface ProductMemberSummary {
+  userId: string;
+  name: string;
+  avatar: string | null;
+  email: string;
+  role: WsRole;
+  workspaces: { id: string; name: string; role: string }[];
+  total: number;
+  inProgress: number;
+  completed: number;
+  overdue: number;
+}
+
+// 跨工作区 KPI 聚合
+export interface ProductStats {
+  total: number;
+  completed: number;
+  inProgress: number;
+  overdue: number;
+  completionRate: number;
+  milestones: number;
+  milestonesDone: number;
+  milestoneRate: number;
+  byWorkspace: {
+    id: string;
+    name: string;
+    total: number;
+    completed: number;
+    inProgress: number;
+    overdue: number;
+    milestones: number;
+    milestonesDone: number;
+    completionRate: number;
+  }[];
+  byVersion: {
+    id: string;
+    name: string;
+    status: string;
+    releaseDate: string | null;
+    total: number;
+    completed: number;
+    completionRate: number;
+  }[];
 }

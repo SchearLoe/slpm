@@ -18,6 +18,7 @@ const FIELD_LABELS: Record<string, string> = {
   deadline: '截止时间',
   tags: '标签',
   assigneeId: '负责人',
+  productVersionId: '产品版本', // P3
 };
 
 // 任务查询条件校验（列表过滤）
@@ -83,13 +84,15 @@ const createSchema = z.object({
   priority: z.string().optional().default('中'),
   status: z.enum(['进行中', '已完成', '待处理', '已延期']).optional().default('进行中'),
   deadline: z.string().datetime().optional().nullable(),
-  // P1-6：甘特图 + 依赖
-  startDate: z.string().datetime().optional().nullable(),
-  milestone: z.boolean().optional().default(false),
-  parentId: z.string().optional().nullable(),
-  blockIds: z.array(z.string()).optional().default([]),
-  tags: z.array(z.string()).optional().default([]),
-  assigneeId: z.string().optional().nullable(),
+    // P1-6：甘特图 + 依赖
+    startDate: z.string().datetime().optional().nullable(),
+    milestone: z.boolean().optional().default(false),
+    parentId: z.string().optional().nullable(),
+    blockIds: z.array(z.string()).optional().default([]),
+    tags: z.array(z.string()).optional().default([]),
+    assigneeId: z.string().optional().nullable(),
+    // P3：所属产品版本（可选）
+    productVersionId: z.string().optional().nullable(),
 });
 
 router.post(
@@ -116,6 +119,7 @@ router.post(
         assigneeId: d.assigneeId ?? req.user!.sub, // 默认指派给自己
         ownerId: req.user!.sub, // 创建者（保留，用于活动流 actor 等）
         workspaceId: req.workspace!.id, // P1-2：归属当前工作区
+        productVersionId: d.productVersionId ?? null, // P3：归属产品版本（可选）
       },
       include: { assignee: { select: { id: true, name: true, avatar: true, role: true } } },
     });
@@ -167,6 +171,8 @@ router.patch(
     if (d.parentId !== undefined) data.parentId = d.parentId;
     if (d.tags !== undefined) data.tags = d.tags;
     if (d.assigneeId !== undefined) data.assigneeId = d.assigneeId;
+    // P3：产品版本（可空）
+    if (d.productVersionId !== undefined) data.productVersionId = d.productVersionId;
 
     // P1-1：读旧值用于活动流变更文案（仅当有字段变化时）
     const changedKeys = Object.keys(data);

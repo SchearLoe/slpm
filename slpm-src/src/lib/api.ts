@@ -17,6 +17,13 @@ export const workspaceStore = {
   clear: () => localStorage.removeItem(WS_KEY),
 };
 
+// P3：当前选中的产品线 id（localStorage）
+export const productStore = {
+  get: () => localStorage.getItem('slpm_product'),
+  set: (id: string) => localStorage.setItem('slpm_product', id),
+  clear: () => localStorage.removeItem('slpm_product'),
+};
+
 // axios 实例：baseURL 走 vite proxy（/api → 后端 8080）
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',

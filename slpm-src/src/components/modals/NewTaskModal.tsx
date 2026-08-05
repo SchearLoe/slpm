@@ -4,7 +4,7 @@ import { Priority, TaskItem } from '@/types';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { motion } from 'framer-motion';
-import { useCreateTask } from '@/lib/queries';
+import { useCreateTask, useProductVersions } from '@/lib/queries';
 import { useAuth } from '@/context/AuthContext';
 import { useApp } from '@/context/AppContext';
 import { apiError } from '@/lib/api';
@@ -18,8 +18,12 @@ interface NewTaskModalProps {
 
 export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onCreated }) => {
   const { user } = useAuth();
-  const { enableConfetti } = useApp();
+  const { enableConfetti, currentWorkspace, products } = useApp();
   const createTask = useCreateTask();
+  // P3：当前工作区所属产品线的版本列表（任务可选关联版本）
+  const productId = currentWorkspace?.productId ?? null;
+  const { data: versions = [] } = useProductVersions(productId ?? undefined);
+  const currentProduct = products.find((p) => p.id === productId);
 
   const [title, setTitle] = useState('');
   const [phase, setPhase] = useState<'需求评审' | '产品设计' | '开发实现' | '测试验证'>('需求评审');
@@ -27,6 +31,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
   const [deadline, setDeadline] = useState('');
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('评审, 需求, 关键路径');
+  const [versionId, setVersionId] = useState('');
   const [error, setError] = useState('');
 
   // 截止时间：默认 7 天后，转 ISO（datetime-local 输入）
@@ -53,6 +58,10 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
     if (deadlineInput) {
       payload.deadline = new Date(deadlineInput).toISOString();
     }
+    // P3：产品版本（可选，空串=不关联）
+    if (versions.length > 0) {
+      payload.productVersionId = versionId || null;
+    }
 
     try {
       const task = await createTask.mutateAsync(payload);
@@ -62,6 +71,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
       }
       setTitle('');
       setDescription('');
+      setVersionId('');
       onCreated?.(task);
       onClose();
     } catch (err) {
@@ -140,6 +150,19 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
             {user?.name || '当前用户'}（默认指派给自己）
           </div>
         </div>
+
+        {/* P3：产品版本（当前工作区归属产品线且有版本时显示） */}
+        {versions.length > 0 && (
+          <div>
+            <label className="block text-[11px] text-white/40 mb-1.5">所属版本（{currentProduct?.name ?? '产品线'}）</label>
+            <LiquidSelect
+              value={versionId}
+              onChange={setVersionId}
+              placeholder="不关联版本"
+              options={[{ value: '', label: '不关联版本' }, ...versions.map((v) => ({ value: v.id, label: v.name }))]}
+            />
+          </div>
+        )}
 
         <div>
           <label className="block text-[11px] text-white/40 mb-1.5">截止时间</label>

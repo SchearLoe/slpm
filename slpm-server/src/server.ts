@@ -13,6 +13,9 @@ import articleRoutes from './routes/article.routes.js';
 import fileRoutes from './routes/file.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import aiRoutes from './routes/ai.routes.js';
+import productRoutes from './routes/product.routes.js';
+import productVersionRoutes from './routes/product-version.routes.js';
+import productDashboardRoutes from './routes/product-dashboard.routes.js';
 import { setupSocket } from './lib/ws.js';
 import { errorHandler, notFound } from './middleware/error.js';
 
@@ -46,6 +49,10 @@ app.use('/api/settings', settingsRoutes);
 // P1-4：通知按收件人维度，不走 requireWorkspace
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ai', aiRoutes);
+// P3：产品线 / 版本 / 跨工作区聚合
+app.use('/api/products', productRoutes);
+app.use('/api/products', productVersionRoutes);
+app.use('/api/products', productDashboardRoutes);
 
 // ---- 错误兜底 ----
 app.use(notFound);

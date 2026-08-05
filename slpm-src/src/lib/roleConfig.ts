@@ -17,6 +17,15 @@ export interface RoleConfig {
 }
 
 export const ROLE_CONFIGS: Record<WsRole, RoleConfig> = {
+  // P3：产品经理 —— 着陆产品管理页，跨项目看需求/人力/版本
+  po: {
+    label: '产品经理',
+    color: 'text-fuchsia-300 bg-fuchsia-400/15',
+    landingPage: 'product',
+    defaultTaskFilter: 'all',
+    navOrder: ['product', 'overview', 'tasks', 'schedule', 'analytics', 'collaboration', 'files', 'knowledge', 'settings'],
+    readOnlyPages: [],
+  },
   pm: {
     label: '项目经理',
     color: 'text-emerald-300 bg-emerald-400/15',
@@ -59,6 +68,7 @@ export function getRoleConfig(role: string | null | undefined): RoleConfig {
 
 /** 所有角色选项（用于邀请/改角色的下拉） */
 export const ROLE_OPTIONS: { value: WsRole; label: string }[] = [
+  { value: 'po', label: '产品经理 (PO)' },
   { value: 'pm', label: '项目经理 (PM)' },
   { value: 'dev', label: '研发工程师 (Dev)' },
   { value: 'qa', label: '测试工程师 (QA)' },

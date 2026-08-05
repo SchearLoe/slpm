@@ -49,6 +49,9 @@ model User {
 
   // P1-4：收到的通知（站内信）
   notifications Notification[]
+
+  // P3：创建的产品线
+  ownedProducts Product[] @relation("ProductOwner")
 }
 
 model UserSettings {
@@ -91,6 +94,10 @@ model Task {
   // P1-2：所属工作区（backfill 后改为 NOT NULL）
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // P3：所属产品版本（可选，任务可不关联任何版本）
+  productVersionId String?
+  productVersion   ProductVersion? @relation(fields: [productVersionId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -184,6 +191,46 @@ model ScheduleEvent {
   @@index([workspaceId])
 }
 
+// ============ 产品线 / 版本（P3：多项目同属一条产品线） ============
+// 层级：Product（产品线）→ Workspace（项目/工作区）→ Task
+// 一个工作区最多归属一个产品线；独立工作区可不归属（productId 可空，向后兼容）。
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique // URL 友好标识（cuid 兜底唯一）
+  description String   @default("")
+  // P3：产品负责人（创建者，自动拥有产品级管理权）
+  ownerId String
+  owner   User   @relation("ProductOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // P3：产品线下的项目（工作区）与版本
+  workspaces Workspace[]
+  versions   ProductVersion[]
+}
+
+model ProductVersion {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name        String   // 如 v2.1.0
+  description String   @default("")
+  status      String   @default("planning") // planning | in_progress | released | archived
+  startDate   DateTime?
+  releaseDate DateTime?
+  order       Int      @default(0) // 手动排序（数值小在前）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // P3：关联到该版本的任务（可空，任务可无版本）
+  tasks Task[]
+
+  @@unique([productId, name])
+  @@index([productId])
+}
+
 // ============ 工作区 / 成员（P1-2 多租户 + RBAC） ============
 
 model Workspace {
@@ -192,6 +239,10 @@ model Workspace {
   slug      String   @unique // URL 友好标识（cuid 兜底唯一）
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // P3：所属产品线（可选——独立工作区可不归属任何产品）
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   members   WorkspaceMember[]
   tasks     Task[]

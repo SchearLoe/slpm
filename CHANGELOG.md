@@ -6,6 +6,39 @@
 
 ## 2026-08-05
 
+### P3：产品线 + 版本管理 + 产品经理跨项目视图
+
+**数据模型（2 迁移，2 新表 + 3 新字段）**
+- 新增 `Product` 模型（id / name / slug / description / **ownerId** 产品负责人，创建者自动拥有产品级管理权）
+- 新增 `ProductVersion` 模型（productId / name / description / status[planning|in_progress|released|archived] / startDate / releaseDate / order；`@@unique([productId, name])` 防重名）
+- Workspace 加 `productId`（可空外键，兼容独立工作区；onDelete: SetNull）
+- Task 加 `productVersionId`（可空外键，任务可关联产品版本；onDelete: SetNull）
+
+**后端**
+- 新建 `middleware/product.ts`：`requireProductAccess`（从 URL `:id` 取产品，校验用户至少是产品下任一工作区成员，注入 `req.product{productId, workspaceIds, role}`；产品负责人/任一关联工作区 po/admin 拥有写权限）+ `requireProductRole`
+- 新建 `routes/product.routes.ts`：`GET /products`（用户可访问产品列表，含工作区/版本计数与最高角色）、`POST /products`（system_admin 或任一工作区 admin）、`GET/PATCH /products/:id`、`POST /products/:id/workspaces`（关联项目，需 po/admin + 目标工作区 admin，防重复归属）、`DELETE /products/:id/workspaces/:wsId`（取消关联）
+- 新建 `routes/product-version.routes.ts`：版本 CRUD（`GET/POST /products/:id/versions`、`PATCH/DELETE /products/:id/versions/:vid`，重名 409，列表附任务数）
+- 新建 `routes/product-dashboard.routes.ts`：跨工作区聚合（po/admin 看全产品数据，其他角色只看自己所属工作区）——`GET /products/:id/tasks`（status/phase/workspaceId/versionId/assignedToMe 筛选 + 附所属项目/版本）、`GET /products/:id/members`（跨区成员去重取最高角色 + 任务计数/延期数）、`GET /products/:id/stats`（KPI 按工作区分列 + 版本分布）
+- `workspace.routes.ts`：WS_ROLES 加 `'po'`；workspaces 列表与创建支持 `productId`
+- `task.routes.ts`：create/update 支持 `productVersionId`；活动流 FIELD_LABELS 加「产品版本」
+- `auth.routes.ts`：`/auth/me` 的 workspaces 返回 `productId`（前端据此判断任务表单是否显示版本选择器）
+
+**前端**
+- `types/index.ts`：WsRole 加 `'po'`；NavTab 加 `'product'`；新增 Product / ProductDetail / ProductVersion / ProductTaskItem / ProductMemberSummary / ProductStats 类型
+- `roleConfig.ts`：新增 po 角色（产品经理，着陆页 `product`，navOrder 产品管理置顶）
+- 新建 `pages/ProductManagementPage.tsx` 三 Tab：
+  - **需求总览**：跨项目 KPI 卡（总数/完成率/延期/里程碑）+ 按项目分列完成进度 + 跨项目需求列表（项目/版本/状态/阶段筛选，点击查看详情并可"在工作区打开"）
+  - **版本管理**：纵向时间线（状态徽章/起止日期/需求数/完成进度条），新建/编辑/删除版本，点击查看版本内需求
+  - **团队视图**：跨项目成员负荷柱状图（已完成/进行中分段色 + 角色徽章 + 所属项目徽章）
+- `Sidebar.tsx`：产品线选择器（localStorage 持久化）+ 新建产品线入口；po/admin 时「产品管理」导航置顶显示
+- `AppContext.tsx`：products / currentProduct / setCurrentProduct 状态（产品列表来自 `/products`）
+- `queries.ts`：新增 11 个 hooks（useProducts / useCreateProduct / useUpdateProduct / useProductDetail / useLinkWorkspace / useUnlinkWorkspace / useProductVersions / useCreateProductVersion / useUpdateProductVersion / useDeleteProductVersion / useProductTasks / useProductMembers / useProductStats）
+- `api.ts`：新增 productStore（`slpm_product`）
+- `NewTaskModal.tsx` / `EditTaskModal.tsx`：当前工作区归属产品线且存在版本时显示「所属版本」下拉
+- `App.tsx`：注册 `/product` 路由 + Tab 映射 + 页面标题
+
+**验证**：API 全流程冒烟测试通过（建产品 → 关联项目 → 建版本 → 跨区建带版本任务 → 聚合统计 → 越权 403）；浏览器 E2E 通过（三 Tab 渲染、版本创建中文正常、任务表单版本选择器、版本统计闭环）；前后端 tsc 零错误。12 个迁移全部应用。
+
 ### P1-6：甘特图 + 任务依赖 + WebSocket 实时推送 + 文件版本历史
 
 **数据模型（1 迁移，3 新字段 + 2 新表）**

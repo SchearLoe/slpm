@@ -10,6 +10,7 @@ import { TeamCollaborationPage } from '@/pages/TeamCollaborationPage';
 import { AIAnalyticsPage } from '@/pages/AIAnalyticsPage';
 import { KnowledgeBasePage } from '@/pages/KnowledgeBasePage';
 import { SettingsCenterPage } from '@/pages/SettingsCenterPage';
+import { ProductManagementPage } from '@/pages/ProductManagementPage';
 import { NewTaskModal } from '@/components/modals/NewTaskModal';
 import { EditTaskModal } from '@/components/modals/EditTaskModal';
 import { NavTab } from '@/types';
@@ -20,6 +21,7 @@ import { RequireAuth } from '@/components/RequireAuth';
 
 // 路由路径 ↔ NavTab 映射
 const TAB_ORDER: NavTab[] = [
+  'product',
   'tasks',
   'overview',
   'files',
@@ -31,6 +33,7 @@ const TAB_ORDER: NavTab[] = [
 ];
 
 const PATH_TO_TAB: Record<string, NavTab> = {
+  '/product': 'product',
   '/tasks': 'tasks',
   '/overview': 'overview',
   '/files': 'files',
@@ -72,6 +75,8 @@ function MainLayout() {
 
   const getPageTitle = (tab: NavTab) => {
     switch (tab) {
+      case 'product':
+        return { title: '产品管理', subtitle: '产品线聚合 · 跨项目需求与版本进度' };
       case 'tasks':
         return { title: '任务管理', subtitle: '高效规划 · 智能协同 · 结果驱动' };
       case 'overview':
@@ -113,6 +118,7 @@ function MainLayout() {
               className="relative z-10 w-full h-full overflow-y-auto overflow-x-hidden"
             >
               <Routes location={location}>
+                <Route path="/product" element={<ProductManagementPage />} />
                 <Route path="/tasks" element={<TaskManagementPage />} />
                 <Route path="/overview" element={<ProjectOverviewPage />} />
                 <Route path="/files" element={<FileDocumentsPage />} />

@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CardDeckItem, TaskItem, UserSettings, WorkspaceMembership, WsRole } from '@/types';
+import { CardDeckItem, Product, TaskItem, UserSettings, WorkspaceMembership, WsRole } from '@/types';
 import { useAuth } from './AuthContext';
-import { api, workspaceStore } from '@/lib/api';
+import { api, productStore, workspaceStore } from '@/lib/api';
+import { useProducts } from '@/lib/queries';
 
 type AccentColor = 'emerald' | 'cyan' | 'purple';
 type GlassBlur = 'standard' | 'ultra' | 'max';
@@ -59,6 +60,13 @@ interface AppContextType {
   setCurrentWorkspace: (id: string) => void;
   addWorkspace: (name: string) => Promise<WorkspaceMembership>;
 
+  // P3：产品线（跨工作区聚合视图）
+  // products：当前用户可访问的产品列表（来自 /products）
+  // currentProduct：当前选中的产品（id 写 localStorage）
+  products: Product[];
+  currentProduct: Product | null;
+  setCurrentProduct: (id: string) => void;
+
   // 主题（持久化到 UserSettings；updateSettings 负责落库）
   accentColor: AccentColor;
   glassBlur: GlassBlur;
@@ -102,6 +110,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 当前工作区的角色（admin/member），供 UI 按钮禁用
   const currentRole: WsRole | null = currentWorkspace?.role ?? null;
+
+  // P3：产品线 —— products 来自 /products（用户可访问的产品）
+  const { data: productsData } = useProducts();
+  const products: Product[] = productsData ?? [];
+  const [currentProductId, setCurrentProductId] = useState<string | null>(() => productStore.get());
+  // 当前选中的产品（localStorage 失效则默认第一个）
+  const currentProduct: Product | null = useMemo(() => {
+    if (!currentProductId) return products[0] ?? null;
+    return products.find((p) => p.id === currentProductId) ?? products[0] ?? null;
+  }, [products, currentProductId]);
+
+  // 产品列表加载后，确保 localStorage 与实际选中同步
+  useEffect(() => {
+    if (!user) {
+      productStore.clear();
+      setCurrentProductId(null);
+      return;
+    }
+    const stored = productStore.get();
+    const valid = stored && products.some((p) => p.id === stored);
+    if (!valid) {
+      const first = products[0];
+      if (first) {
+        productStore.set(first.id);
+        setCurrentProductId(first.id);
+      }
+    } else if (stored !== currentProductId) {
+      setCurrentProductId(stored);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, products.length]);
+
+  // P3：切换产品 —— 写 localStorage（产品页按 productId 重新拉取）
+  const setCurrentProduct = (id: string) => {
+    productStore.set(id);
+    setCurrentProductId(id);
+  };
 
   // 用户登录/恢复会话带来 workspaces 时，确保 localStorage 与实际选中同步
   useEffect(() => {
@@ -191,6 +236,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentRole,
         setCurrentWorkspace,
         addWorkspace,
+        // P3：产品线
+        products,
+        currentProduct,
+        setCurrentProduct,
         accentColor,
         glassBlur,
         enableConfetti,

@@ -15,6 +15,8 @@ import {
   UserCheck,
   LogOut,
   User,
+  Package,
+  Layers,
 } from 'lucide-react';
 import { NavTab } from '@/types';
 import { clsx } from 'clsx';
@@ -24,6 +26,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useApp } from '@/context/AppContext';
 import { apiError } from '@/lib/api';
 import { getRoleConfig } from '@/lib/roleConfig';
+import { useCreateProduct } from '@/lib/queries';
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -39,21 +42,32 @@ const navItems: { id: NavTab; label: string; icon: React.ElementType; badge?: st
   { id: 'analytics', label: '智能分析', icon: Sparkles, badge: 'AI' },
   { id: 'knowledge', label: '知识库', icon: BookOpen },
   { id: 'settings', label: '设置中心', icon: Settings },
+  // P3：产品管理（产品线聚合视图）
+  { id: 'product', label: '产品管理', icon: Package },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { show, ToastEl } = useToast();
   const { user, logout } = useAuth();
   // P1-2：从 AppContext 取真实工作区（替代原硬编码 + 本地 state）
-  const { workspaces, currentWorkspace, setCurrentWorkspace, addWorkspace, currentRole } = useApp();
+  const { workspaces, currentWorkspace, setCurrentWorkspace, addWorkspace, currentRole, products, currentProduct, setCurrentProduct } = useApp();
   // P2-1：按角色排序导航
   const roleCfg = getRoleConfig(currentRole);
   const sortedNavItems = roleCfg.navOrder
     .map((id) => navItems.find((n) => n.id === id))
     .filter((n): n is { id: NavTab; label: string; icon: React.ElementType; badge?: string } => !!n);
+  // P3：产品管理入口 —— 存在产品且当前用户在产品下有 po/admin 权限时置顶显示
+  const canManageProduct = !!currentProduct && (currentProduct.role === 'po' || currentProduct.role === 'admin');
+  const effectiveNavItems = canManageProduct && !sortedNavItems.some((n) => n.id === 'product')
+    ? [navItems[navItems.length - 1], ...sortedNavItems]
+    : sortedNavItems;
   const [workspaceExpanded, setWorkspaceExpanded] = useState(false);
+  const [productExpanded, setProductExpanded] = useState(false);
   const [createWsOpen, setCreateWsOpen] = useState(false);
+  const [createProdOpen, setCreateProdOpen] = useState(false);
   const [wsName, setWsName] = useState('');
+  const [prodName, setProdName] = useState('');
+  const [prodDesc, setProdDesc] = useState('');
   const [creating, setCreating] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   // profile 从当前登录用户初始化（替代原硬编码 Brandon）
@@ -81,6 +95,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     }
   };
 
+  // P3：新建产品线
+  const createProduct = useCreateProduct();
+  const createProductLine = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prodName.trim() || creating) return;
+    setCreating(true);
+    try {
+      const p = await createProduct.mutateAsync({ name: prodName.trim(), description: prodDesc.trim() });
+      setCurrentProduct(p.id);
+      setProdName('');
+      setProdDesc('');
+      setCreateProdOpen(false);
+      show(`产品线「${p.name}」已创建`);
+    } catch (err) {
+      show(apiError(err, '创建失败'));
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <>
       {ToastEl}
@@ -94,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
           </div>
 
           <nav className="space-y-1">
-            {sortedNavItems.map((item) => {
+            {effectiveNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
@@ -133,6 +167,69 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
         </div>
 
         <div className="space-y-2.5 pt-3 mt-3 border-t border-white/[0.06]">
+          {/* P3：产品线选择器（跨工作区聚合视图的上下文） */}
+          <div className="flex items-center justify-between px-2 text-[11px] font-medium text-white/35">
+            <span>产品线</span>
+            <button
+              onClick={() => setCreateProdOpen(true)}
+              className="p-1 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+              title="新建产品线"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setProductExpanded((v) => !v)}
+              className="w-full liquid-pill flex items-center justify-between px-3 py-2 text-[12px] font-medium text-white/85"
+            >
+              <span className="flex items-center gap-2 truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.8)]" />
+                <span className="truncate">{currentProduct?.name ?? '无产品线'}</span>
+              </span>
+              <ChevronDown className={clsx('w-3.5 h-3.5 text-white/40 transition-transform', productExpanded && 'rotate-180')} />
+            </button>
+
+            <AnimatePresence>
+              {productExpanded && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  className="absolute bottom-full left-0 right-0 mb-2 p-1.5 liquid-glass z-50 space-y-0.5 max-h-52 overflow-y-auto"
+                >
+                  {products.length === 0 && (
+                    <div className="px-3 py-2 text-[12px] text-white/40">暂无产品线，点 + 创建</div>
+                  )}
+                  {products.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setCurrentProduct(p.id);
+                        setProductExpanded(false);
+                        show(`已切换到产品线「${p.name}」`);
+                      }}
+                      className={clsx(
+                        'w-full text-left px-3 py-2 rounded-xl text-[12px] flex items-center justify-between transition-colors',
+                        currentProduct?.id === p.id ? 'bg-violet-400/15 text-violet-200' : 'text-white/60 hover:bg-white/5 hover:text-white'
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5 truncate">
+                        <Layers className="w-3 h-3 shrink-0 text-white/30" />
+                        <span className="truncate">{p.name}</span>
+                        {(p.role === 'po' || p.role === 'admin') && (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-violet-400/20 text-violet-300 shrink-0">管理</span>
+                        )}
+                      </span>
+                      {currentProduct?.id === p.id && <UserCheck className="w-3.5 h-3.5 shrink-0" />}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           <div className="flex items-center justify-between px-2 text-[11px] font-medium text-white/35">
             <span>我的工作区</span>
             <button
@@ -235,6 +332,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
             value={wsName}
             onChange={(e) => setWsName(e.target.value)}
             placeholder="工作区名称"
+            className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white"
+          />
+        </form>
+      </LiquidModal>
+
+      <LiquidModal
+        open={createProdOpen}
+        onClose={() => setCreateProdOpen(false)}
+        title="新建产品线"
+        subtitle="多个项目同属一条产品线，统一管理需求与版本"
+        icon={<Package className="w-5 h-5" />}
+        footer={
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setCreateProdOpen(false)} className="h-10 px-4 rounded-full liquid-btn-ghost text-[12px] text-white/60">取消</button>
+            <button form="prod-form" type="submit" disabled={creating} className="h-10 px-4 rounded-full liquid-btn-primary text-[12px] font-bold disabled:opacity-60">{creating ? '创建中…' : '创建'}</button>
+          </div>
+        }
+      >
+        <form id="prod-form" onSubmit={createProductLine} className="space-y-3">
+          <input
+            required
+            value={prodName}
+            onChange={(e) => setProdName(e.target.value)}
+            placeholder="产品线名称"
+            className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white"
+          />
+          <input
+            value={prodDesc}
+            onChange={(e) => setProdDesc(e.target.value)}
+            placeholder="产品描述（可选）"
             className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white"
           />
         </form>

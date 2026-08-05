@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
-import { TaskItem, TaskComment, TaskActivityEntry, WorkspaceMembership, WorkspaceMember, KnowledgeArticle, ArticleCategory, FileRecord, AppNotification, AiConfig, AiSuggestionResult, AiUsageSummary, WsRole } from '@/types';
+import { TaskItem, TaskComment, TaskActivityEntry, WorkspaceMembership, WorkspaceMember, KnowledgeArticle, ArticleCategory, FileRecord, AppNotification, AiConfig, AiSuggestionResult, AiUsageSummary, WsRole, Product, ProductDetail, ProductVersion, ProductVersionStatus, ProductTaskItem, ProductMemberSummary, ProductStats } from '@/types';
 
 // ============ 任务 ============
 
@@ -635,6 +635,198 @@ export function useAiUsage() {
       return res.data.usage;
     },
     retry: false,
+  });
+}
+
+// ============ P3：产品线 / 版本 / 跨工作区聚合 ============
+
+const PRODUCTS_KEY = ['products'] as const;
+
+// 当前用户可访问的产品列表
+export function useProducts() {
+  return useQuery({
+    queryKey: PRODUCTS_KEY,
+    queryFn: async () => {
+      const res = await api.get<{ products: Product[] }>('/products');
+      return res.data.products;
+    },
+  });
+}
+
+// 新建产品线（system_admin 或任一工作区 admin）
+export function useCreateProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { name: string; description?: string }) => {
+      const res = await api.post<{ product: Product }>('/products', input);
+      return res.data.product;
+    },
+    onSuccess: (product) => {
+      qc.setQueryData<Product[]>(PRODUCTS_KEY, (old) => [product, ...(old ?? [])]);
+    },
+  });
+}
+
+// 更新产品（名称/描述，po/admin）
+export function useUpdateProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string } & Partial<Pick<Product, 'name' | 'description'>>) => {
+      const res = await api.patch<{ product: Product }>(`/products/${id}`, updates);
+      return res.data.product;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+  });
+}
+
+// 产品详情（含关联工作区）
+export function useProductDetail(productId: string | undefined) {
+  return useQuery({
+    queryKey: ['product-detail', productId],
+    queryFn: async () => {
+      const res = await api.get<{ product: ProductDetail }>(`/products/${productId}`);
+      return res.data.product;
+    },
+    enabled: !!productId,
+  });
+}
+
+// 关联工作区到产品（po/admin + 目标工作区 admin）
+export function useLinkWorkspace(productId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (workspaceId: string) => {
+      const res = await api.post<{ workspace: { id: string; name: string; slug: string } }>(`/products/${productId}/workspaces`, { workspaceId });
+      return res.data.workspace;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['product-detail', productId] });
+      qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
+      qc.invalidateQueries({ queryKey: ['workspaces'] });
+    },
+  });
+}
+
+// 取消关联（po/admin + 目标工作区 admin）
+export function useUnlinkWorkspace(productId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (workspaceId: string) => {
+      await api.delete(`/products/${productId}/workspaces/${workspaceId}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['product-detail', productId] });
+      qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
+      qc.invalidateQueries({ queryKey: ['workspaces'] });
+    },
+  });
+}
+
+// ---- 版本管理 ----
+
+// 版本列表（按 order 升序，附任务数）
+export function useProductVersions(productId: string | undefined) {
+  return useQuery({
+    queryKey: ['product-versions', productId],
+    queryFn: async () => {
+      const res = await api.get<{ versions: ProductVersion[] }>(`/products/${productId}/versions`);
+      return res.data.versions;
+    },
+    enabled: !!productId,
+  });
+}
+
+// 创建版本（po/admin）
+export function useCreateProductVersion(productId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      name: string;
+      description?: string;
+      status?: ProductVersionStatus;
+      startDate?: string | null;
+      releaseDate?: string | null;
+      order?: number;
+    }) => {
+      const res = await api.post<{ version: ProductVersion }>(`/products/${productId}/versions`, input);
+      return res.data.version;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['product-versions', productId] });
+      qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+  });
+}
+
+// 更新版本（po/admin）
+export function useUpdateProductVersion(productId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string } & Partial<Omit<ProductVersion, 'id' | 'taskCount' | 'createdAt' | 'updatedAt'>>) => {
+      const res = await api.patch<{ version: ProductVersion }>(`/products/${productId}/versions/${id}`, updates);
+      return res.data.version;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['product-versions', productId] });
+    },
+  });
+}
+
+// 删除版本（po/admin）
+export function useDeleteProductVersion(productId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/products/${productId}/versions/${id}`);
+      return id;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['product-versions', productId] });
+      qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+  });
+}
+
+// ---- 跨工作区聚合（产品视图） ----
+
+// 跨工作区任务列表（支持 status/phase/workspaceId/versionId/assignedToMe 筛选）
+export function useProductTasks(
+  productId: string | undefined,
+  params?: { status?: string; phase?: string; workspaceId?: string; versionId?: string; assignedToMe?: boolean },
+) {
+  return useQuery({
+    queryKey: ['product-tasks', productId, params],
+    queryFn: async () => {
+      const res = await api.get<{ tasks: ProductTaskItem[] }>(`/products/${productId}/tasks`, { params });
+      return res.data.tasks;
+    },
+    enabled: !!productId,
+  });
+}
+
+// 跨工作区成员负荷聚合
+export function useProductMembers(productId: string | undefined) {
+  return useQuery({
+    queryKey: ['product-members', productId],
+    queryFn: async () => {
+      const res = await api.get<{ members: ProductMemberSummary[] }>(`/products/${productId}/members`);
+      return res.data.members;
+    },
+    enabled: !!productId,
+  });
+}
+
+// 跨工作区 KPI 聚合（按工作区分列 + 版本分布）
+export function useProductStats(productId: string | undefined) {
+  return useQuery({
+    queryKey: ['product-stats', productId],
+    queryFn: async () => {
+      const res = await api.get<{ stats: ProductStats }>(`/products/${productId}/stats`);
+      return res.data.stats;
+    },
+    enabled: !!productId,
   });
 }
 

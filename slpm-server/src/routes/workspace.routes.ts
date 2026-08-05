@@ -7,8 +7,8 @@ import { ApiError } from '../middleware/error.js';
 
 const router = Router();
 
-// P2-1：职能角色枚举
-const WS_ROLES = ['admin', 'pm', 'dev', 'qa'] as const;
+// P2-1：职能角色枚举（P3 新增 po=产品经理）
+const WS_ROLES = ['admin', 'pm', 'dev', 'qa', 'po'] as const;
 type WsRole = (typeof WS_ROLES)[number];
 
 // 辅助：生成 URL 友好的 slug（cuid 兜底保证唯一）
@@ -19,20 +19,21 @@ function makeSlug(name: string): string {
 
 // ============ 工作区 ============
 
-// GET /api/workspaces —— 当前用户的所有工作区（含每条的 role）
+// GET /api/workspaces —— 当前用户的所有工作区（含每条的 role 与产品线归属）
 router.get(
   '/',
   requireAuth,
   asyncHandler(async (req, res) => {
     const memberships = await prisma.workspaceMember.findMany({
       where: { userId: req.user!.sub },
-      include: { workspace: { select: { id: true, name: true, slug: true } } },
+      include: { workspace: { select: { id: true, name: true, slug: true, productId: true } } },
       orderBy: { createdAt: 'asc' },
     });
     const workspaces = memberships.map((m) => ({
       id: m.workspace.id,
       name: m.workspace.name,
       slug: m.workspace.slug,
+      productId: m.workspace.productId, // P3：产品线归属（可空）
       role: m.role as WsRole,
     }));
     res.json({ workspaces });
@@ -42,6 +43,7 @@ router.get(
 // POST /api/workspaces —— 新建工作区，创建者自动 admin
 const createWsSchema = z.object({
   name: z.string().min(1, '工作区名称必填').max(60),
+  productId: z.string().optional().nullable(), // P3：可选归属产品线
 });
 router.post(
   '/',
@@ -55,11 +57,12 @@ router.post(
       data: {
         name: parsed.data.name,
         slug,
+        productId: parsed.data.productId ?? null,
         members: {
           create: { userId: req.user!.sub, role: 'admin' },
         },
       },
-      select: { id: true, name: true, slug: true },
+      select: { id: true, name: true, slug: true, productId: true },
     });
     res.status(201).json({
       workspace: { ...workspace, role: 'admin' as WsRole },

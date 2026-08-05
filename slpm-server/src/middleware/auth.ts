@@ -11,7 +11,13 @@ declare global {
       // P1-2：当前请求的工作区上下文（由 requireWorkspace 中间件填充）
       workspace?: {
         id: string;
-        role: string; // P2-1: admin | pm | dev | qa
+        role: string; // P2-1: admin | pm | dev | qa | po
+      };
+      // P3：当前请求的产品上下文（由 requireProductAccess 中间件填充）
+      product?: {
+        productId: string;
+        workspaceIds: string[]; // 用户可访问的、属于该产品的工作区 id
+        role: string | null; // 用户在任一关联工作区的最高角色（用于写权限判断）
       };
     }
   }
