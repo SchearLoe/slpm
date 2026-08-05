@@ -6,7 +6,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
-import { signToken } from '../lib/jwt.js';
+import { signToken, verifyToken } from '../lib/jwt.js';
 import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { ApiError } from '../middleware/error.js';
 import { env } from '../config/env.js';
@@ -272,6 +272,63 @@ router.get(
     if (!fs.existsSync(abs)) return res.status(404).json({ error: '头像不存在' });
     res.sendFile(abs);
   },
+);
+
+// ---- POST /api/auth/forgot-password ----
+// P4-2：忘记密码 —— 生成 15 分钟有效重置 token。
+// 防枚举：用户不存在也返回 ok:true。开发环境返回重置链接（生产需邮件服务）。
+const forgotSchema = z.object({
+  email: z.string().email('邮箱格式不正确'),
+});
+router.post(
+  '/forgot-password',
+  asyncHandler(async (req, res) => {
+    const parsed = forgotSchema.safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
+
+    const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+    if (!user) {
+      // 防枚举：统一响应
+      return res.json({ ok: true, devResetUrl: null });
+    }
+
+    const token = signToken({ sub: user.id, email: user.email, purpose: 'reset' }, '15m');
+    const devResetUrl = env.nodeEnv === 'development'
+      ? `${env.clientOrigin}/reset-password?token=${token}`
+      : null;
+    console.log(`🔑 [forgot-password] ${parsed.data.email}${devResetUrl ? ` → 重置链接: ${devResetUrl}` : '（生产环境请接入邮件服务）'}`);
+    res.json({ ok: true, devResetUrl });
+  }),
+);
+
+// ---- POST /api/auth/reset-password ----
+const resetSchema = z.object({
+  token: z.string().min(1, '缺少重置凭证'),
+  newPassword: z.string().min(6, '新密码至少 6 位'),
+});
+router.post(
+  '/reset-password',
+  asyncHandler(async (req, res) => {
+    const parsed = resetSchema.safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
+
+    let payload: ReturnType<typeof verifyToken>;
+    try {
+      payload = verifyToken(parsed.data.token);
+    } catch {
+      throw new ApiError(400, '重置链接无效或已过期，请重新申请');
+    }
+    if (payload.purpose !== 'reset') {
+      throw new ApiError(400, '重置链接无效或已过期，请重新申请');
+    }
+
+    const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+    await prisma.user.update({
+      where: { id: payload.sub },
+      data: { passwordHash },
+    });
+    res.json({ ok: true });
+  }),
 );
 
 export default router;

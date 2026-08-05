@@ -6,6 +6,27 @@
 
 ## 2026-08-05
 
+### P4-2（续）：忘记密码 + 在线状态 + Playwright E2E 冒烟套件
+
+**后端**
+- `auth.routes.ts`：新增 `POST /api/auth/forgot-password`（生成 15 分钟有效重置 token；防枚举——用户不存在也返回 ok；开发环境响应带 `devResetUrl` 重置链接并打印到控制台）+ `POST /api/auth/reset-password`（校验 token purpose + 更新密码）
+- `lib/jwt.ts`：signToken 支持自定义有效期；JwtPayload 加 `purpose: 'reset'`
+- `lib/ws.ts`：**在线状态（presence）**——连接/断开维护在线集合（多标签页计数防误删），上线/下线广播 `presence` 事件到所在工作区房间，新连接推送 `presence:init` 当前在线列表
+- `workspace.routes.ts`：新增 `GET /api/workspaces/:id/online`（当前在线成员 userId 列表）
+
+**前端**
+- `LoginPage.tsx`：新增「忘记密码？」入口 → 邮箱提交 → 显示重置结果（开发模式展示重置链接）
+- 新建 `pages/ResetPasswordPage.tsx`（`/reset-password?token=xxx`，免登录路由）：新密码 + 确认 + 提交 → 成功跳登录
+- `TeamCollaborationPage.tsx`：成员卡片**在线绿点**（useWorkspaceOnline 快照 + WebSocket presence 实时更新）
+- **修复 WebSocket 连接 bug**：`lib/socket.ts` 原先用 `VITE_API_BASE_URL=/api` 作 socket.io 地址导致连接失败（P1-6 遗留）——改为开发直连 `http://localhost:8080`、生产同源、`VITE_WS_URL` 可覆盖
+- `queries.ts`：新增 useWorkspaceOnline
+
+**E2E 测试套件（新）**
+- 根目录新增 Playwright：`playwright.config.ts` + `e2e/smoke.spec.ts`（3 个冒烟用例：注册→建任务→看板可见、注册→建日程→列表可见、注册→设置页渲染），每个测试独立注册唯一账号
+- `npm run test:e2e` / `test:e2e:headed`；chromium 已安装；`.gitignore` 忽略 test-results/playwright-report
+
+**验证**：3/3 E2E 冒烟通过；忘记密码全流程（API + 浏览器 UI）通过；跨用户在线绿点（双标签页互见）通过；前后端 tsc 零错误。测试数据已清理。
+
 ### P4-2（续）：产品线深化 —— 路线图 + 需求池 + 跨项目指派 + Release Notes
 
 **数据模型（1 迁移）**

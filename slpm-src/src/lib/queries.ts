@@ -232,6 +232,18 @@ export function useWorkspaceMembers(workspaceId: string | undefined) {
   });
 }
 
+// P4-2：当前在线成员 userId 列表（WebSocket presence 快照）
+export function useWorkspaceOnline(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ['workspace-online', workspaceId],
+    queryFn: async () => {
+      const res = await api.get<{ online: string[] }>(`/workspaces/${workspaceId}/online`);
+      return new Set(res.data.online);
+    },
+    enabled: !!workspaceId,
+  });
+}
+
 // 邀请成员（admin）
 export function useInviteMember(workspaceId: string | undefined) {
   const qc = useQueryClient();

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Users, UserCheck, MessageSquare, UserMinus } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -7,7 +7,8 @@ import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { useToast } from '@/components/ui/Toast';
 import { useApp } from '@/context/AppContext';
 import { springSoft } from '@/lib/motion';
-import { useTasks, useWorkspaceMembers, useInviteMember, useRemoveMember, useUpdateMemberRole, useSendMessage } from '@/lib/queries';
+import { useTasks, useWorkspaceMembers, useWorkspaceOnline, useInviteMember, useRemoveMember, useUpdateMemberRole, useSendMessage } from '@/lib/queries';
+import { onPresence, onPresenceInit } from '@/lib/socket';
 import { apiError } from '@/lib/api';
 import { ROLE_OPTIONS, getRoleConfig } from '@/lib/roleConfig';
 import { WsRole } from '@/types';
@@ -21,6 +22,27 @@ export const TeamCollaborationPage: React.FC = () => {
 
   // P1-3：成员列表来自真实 workspace 成员（替代写死的 initialMembers）
   const { data: members = [], isLoading } = useWorkspaceMembers(wsId);
+  // P4-2：在线成员（快照 + WebSocket presence 实时更新）
+  const { data: onlineSnapshot } = useWorkspaceOnline(wsId);
+  const [onlineSet, setOnlineSet] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (onlineSnapshot) setOnlineSet(onlineSnapshot);
+  }, [onlineSnapshot]);
+  useEffect(() => {
+    const offInit = onPresenceInit(({ online }) => setOnlineSet(new Set(online)));
+    const offPresence = onPresence(({ userId, online }) => {
+      setOnlineSet((prev) => {
+        const next = new Set(prev);
+        if (online) next.add(userId);
+        else next.delete(userId);
+        return next;
+      });
+    });
+    return () => {
+      offInit();
+      offPresence();
+    };
+  }, []);
   // P1-3：在办任务数从真实任务聚合（按 assigneeId 计未完成数）
   const { data: tasks = [] } = useTasks();
 
@@ -140,8 +162,19 @@ export const TeamCollaborationPage: React.FC = () => {
               <GlassCard variant="interactive" className="p-5 space-y-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-11 h-11 rounded-2xl liquid-icon-well font-bold text-[12px] text-white flex items-center justify-center shrink-0">
-                      {member.avatar ?? member.name.slice(0, 2).toUpperCase()}
+                    <div className="relative w-11 h-11 rounded-2xl liquid-icon-well font-bold text-[12px] text-white flex items-center justify-center shrink-0 overflow-hidden">
+                      {member.avatar && member.avatar.startsWith('avatars/') ? (
+                        <img src={`/api/auth/avatar/${member.avatar.split('/').pop()}`} alt={member.name} className="w-full h-full object-cover" />
+                      ) : (
+                        member.avatar ?? member.name.slice(0, 2).toUpperCase()
+                      )}
+                      {/* P4-2：在线状态绿点 */}
+                      <span
+                        className={`absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-black/40 transition-colors ${
+                          onlineSet.has(member.userId) ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]' : 'bg-white/20'
+                        }`}
+                        title={onlineSet.has(member.userId) ? '在线' : '离线'}
+                      />
                     </div>
                     <div className="min-w-0">
                       <h3 className="text-[13px] font-bold text-white truncate">{member.name}</h3>

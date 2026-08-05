@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, Mail, Lock, User as UserIcon, ArrowRight } from 'lucide-react';
+import { Target, Mail, Lock, User as UserIcon, ArrowRight, KeyRound } from 'lucide-react';
 import { useAuth, apiError } from '@/context/AuthContext';
+import { api } from '@/lib/api';
 
-type Mode = 'login' | 'register';
+type Mode = 'login' | 'register' | 'forgot';
 
 export const LoginPage: React.FC = () => {
   const { login, register: registerFn } = useAuth();
@@ -18,12 +19,24 @@ export const LoginPage: React.FC = () => {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // P4-2：忘记密码 —— 结果提示（开发环境展示重置链接）
+  const [forgotResult, setForgotResult] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
+      if (mode === 'forgot') {
+        setForgotResult(null);
+        const res = await api.post<{ ok: boolean; devResetUrl: string | null }>('/auth/forgot-password', { email });
+        if (res.data.devResetUrl) {
+          setForgotResult(`重置链接已生成（开发模式）：${res.data.devResetUrl}`);
+        } else {
+          setForgotResult('如果该邮箱已注册，重置指引将发送到你的邮箱（当前环境未接入邮件服务，请查看服务端控制台）。');
+        }
+        return;
+      }
       if (mode === 'login') {
         await login(email, password);
       } else {
@@ -111,6 +124,21 @@ export const LoginPage: React.FC = () => {
                 </div>
               </motion.div>
             )}
+            {mode === 'forgot' && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="pb-3">
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/55">
+                    <KeyRound className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                    输入注册邮箱，我们将生成密码重置链接
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
 
           <div className="relative">
@@ -125,18 +153,20 @@ export const LoginPage: React.FC = () => {
             />
           </div>
 
-          <div className="relative">
-            <Lock className="w-3.5 h-3.5 text-white/35 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
-            <input
-              required
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="密码（至少 6 位）"
-              minLength={6}
-              className={field}
-            />
-          </div>
+          {mode !== 'forgot' && (
+            <div className="relative">
+              <Lock className="w-3.5 h-3.5 text-white/35 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+              <input
+                required
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="密码（至少 6 位）"
+                minLength={6}
+                className={field}
+              />
+            </div>
+          )}
 
           <AnimatePresence>
             {error && (
@@ -149,6 +179,16 @@ export const LoginPage: React.FC = () => {
                 {error}
               </motion.div>
             )}
+            {forgotResult && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="text-[11px] text-emerald-200 bg-emerald-500/10 border border-emerald-400/25 rounded-lg px-3 py-2 break-all"
+              >
+                {forgotResult}
+              </motion.div>
+            )}
           </AnimatePresence>
 
           <motion.button
@@ -157,14 +197,27 @@ export const LoginPage: React.FC = () => {
             whileTap={{ scale: 0.98 }}
             className="w-full h-10 rounded-full liquid-btn-primary text-[12px] font-bold flex items-center justify-center gap-1.5 disabled:opacity-60"
           >
-            {busy ? '处理中…' : mode === 'login' ? '登录' : '创建账号'}
+            {busy ? '处理中…' : mode === 'login' ? '登录' : mode === 'register' ? '创建账号' : '发送重置链接'}
             {!busy && <ArrowRight className="w-3.5 h-3.5" />}
           </motion.button>
         </form>
 
         <p className="text-[10px] text-white/30 text-center mt-5 relative z-10 flex items-center justify-center gap-1">
           <Target className="w-3 h-3" />
-          {mode === 'login' ? '还没有账号？点击上方「注册」' : '已有账号？点击上方「登录」'}
+          {mode === 'forgot' ? (
+            <button type="button" onClick={() => setMode('login')} className="hover:text-white/60 transition-colors">
+              返回登录
+            </button>
+          ) : (
+            <>
+              {mode === 'login' ? '还没有账号？点击上方「注册」' : '已有账号？点击上方「登录」'}
+              {mode === 'login' && (
+                <button type="button" onClick={() => { setMode('forgot'); setError(''); }} className="text-emerald-300/80 hover:text-emerald-200 transition-colors ml-2">
+                  忘记密码？
+                </button>
+              )}
+            </>
+          )}
         </p>
       </motion.div>
     </div>

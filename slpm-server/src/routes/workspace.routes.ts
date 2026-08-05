@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireWorkspace } from '../middleware/workspace.js';
+import { getOnlineUsersList } from '../lib/ws.js';
 import { ApiError } from '../middleware/error.js';
 
 const router = Router();
@@ -93,6 +94,21 @@ router.get(
         role: m.role as WsRole,
       })),
     });
+  }),
+);
+
+// GET /api/workspaces/:id/online —— P4-2：当前在线成员 userId 列表（WebSocket presence）
+router.get(
+  '/:id/online',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    const onlineIds = getOnlineUsersList();
+    const members = await prisma.workspaceMember.findMany({
+      where: { workspaceId: req.workspace!.id, userId: { in: onlineIds } },
+      select: { userId: true },
+    });
+    res.json({ online: members.map((m) => m.userId) });
   }),
 );
 

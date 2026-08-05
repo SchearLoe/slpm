@@ -25,3 +25,7 @@ uploads/
 
 # ZCode sessions (local-only)
 .zcode/
+
+# Playwright E2E
+test-results/
+playwright-report/

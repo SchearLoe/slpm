@@ -1,0 +1,25 @@
+{
+  "name": "slpm",
+  "version": "1.0.0",
+  "description": "> 液态毛玻璃风格 · 智能任务与项目管理",
+  "main": "index.js",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SchearLoe/slpm.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SchearLoe/slpm/issues"
+  },
+  "homepage": "https://github.com/SchearLoe/slpm#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  },
+  "private": true
+}

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import App from './App';
 import { LoginPage } from './pages/LoginPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { AuthProvider } from './context/AuthContext';
 import { QueryProvider } from './context/QueryProvider';
 import './index.css';
@@ -13,8 +14,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <QueryProvider>
         <AuthProvider>
           <Routes>
-            {/* 登录页：公开路由 */}
+            {/* 公开路由 */}
             <Route path="/login" element={<LoginPage />} />
+            {/* P4-2：密码重置页（免登录） */}
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             {/* 其余全部走 App（内含 RequireAuth 守卫） */}
             <Route path="/*" element={<App />} />
           </Routes>
