@@ -2,10 +2,14 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler, requireAuth } from '../middleware/auth.js';
-import { requireRole, requireWorkspace } from '../middleware/workspace.js';
+import { requireAdmin, requireWorkspace } from '../middleware/workspace.js';
 import { ApiError } from '../middleware/error.js';
 
 const router = Router();
+
+// P2-1：职能角色枚举
+const WS_ROLES = ['admin', 'pm', 'dev', 'qa'] as const;
+type WsRole = (typeof WS_ROLES)[number];
 
 // 辅助：生成 URL 友好的 slug（cuid 兜底保证唯一）
 function makeSlug(name: string): string {
@@ -29,7 +33,7 @@ router.get(
       id: m.workspace.id,
       name: m.workspace.name,
       slug: m.workspace.slug,
-      role: m.role as 'admin' | 'member',
+      role: m.role as WsRole,
     }));
     res.json({ workspaces });
   }),
@@ -58,14 +62,14 @@ router.post(
       select: { id: true, name: true, slug: true },
     });
     res.status(201).json({
-      workspace: { ...workspace, role: 'admin' as const },
+      workspace: { ...workspace, role: 'admin' as WsRole },
     });
   }),
 );
 
 // ============ 成员管理 ============
 
-// GET /api/workspaces/:id/members —— 成员列表（admin/member 都可查）
+// GET /api/workspaces/:id/members —— 成员列表
 router.get(
   '/:id/members',
   requireAuth,
@@ -83,7 +87,7 @@ router.get(
         name: m.user.name,
         avatar: m.user.avatar,
         email: m.user.email,
-        role: m.role as 'admin' | 'member',
+        role: m.role as WsRole,
       })),
     });
   }),
@@ -92,13 +96,13 @@ router.get(
 // POST /api/workspaces/:id/members —— 邀请成员（按 email 查找已注册用户），仅 admin
 const inviteSchema = z.object({
   email: z.string().email('邮箱格式不正确'),
-  role: z.enum(['admin', 'member']).optional().default('member'),
+  role: z.enum(WS_ROLES).optional().default('dev'),
 });
 router.post(
   '/:id/members',
   requireAuth,
   requireWorkspace,
-  requireRole('admin'),
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const parsed = inviteSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
@@ -116,7 +120,6 @@ router.post(
         include: { user: { select: { id: true, name: true, avatar: true, email: true } } },
       })
       .catch((e: { code?: string }) => {
-        // P2002 唯一约束冲突 → 该用户已是成员
         if (e.code === 'P2002') throw new ApiError(409, '该用户已是工作区成员');
         throw e;
       });
@@ -128,7 +131,7 @@ router.post(
         name: membership.user.name,
         avatar: membership.user.avatar,
         email: membership.user.email,
-        role: membership.role as 'admin' | 'member',
+        role: membership.role as WsRole,
       },
     });
   }),
@@ -136,13 +139,13 @@ router.post(
 
 // PATCH /api/workspaces/:id/members/:userId —— 改成员角色，仅 admin
 const updateRoleSchema = z.object({
-  role: z.enum(['admin', 'member']),
+  role: z.enum(WS_ROLES),
 });
 router.patch(
   '/:id/members/:userId',
   requireAuth,
   requireWorkspace,
-  requireRole('admin'),
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const parsed = updateRoleSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
@@ -151,17 +154,16 @@ router.patch(
       where: { workspaceId_userId: { workspaceId: req.workspace!.id, userId: req.params.userId } },
       data: { role: parsed.data.role },
     });
-    res.json({ member: { userId: membership.userId, role: membership.role as 'admin' | 'member' } });
+    res.json({ member: { userId: membership.userId, role: membership.role as WsRole } });
   }),
 );
 
 // DELETE /api/workspaces/:id/members/:userId —— 移除成员，仅 admin
-// 注意：不能移除自己（避免工作区无 admin），逻辑在 handler 内校验
 router.delete(
   '/:id/members/:userId',
   requireAuth,
   requireWorkspace,
-  requireRole('admin'),
+  requireAdmin,
   asyncHandler(async (req, res) => {
     if (req.params.userId === req.user!.sub) {
       throw new ApiError(400, '不能移除自己，如需退出请使用「退出工作区」');

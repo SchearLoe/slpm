@@ -23,6 +23,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { useApp } from '@/context/AppContext';
 import { apiError } from '@/lib/api';
+import { getRoleConfig } from '@/lib/roleConfig';
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -44,7 +45,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { show, ToastEl } = useToast();
   const { user, logout } = useAuth();
   // P1-2：从 AppContext 取真实工作区（替代原硬编码 + 本地 state）
-  const { workspaces, currentWorkspace, setCurrentWorkspace, addWorkspace } = useApp();
+  const { workspaces, currentWorkspace, setCurrentWorkspace, addWorkspace, currentRole } = useApp();
+  // P2-1：按角色排序导航
+  const roleCfg = getRoleConfig(currentRole);
+  const sortedNavItems = roleCfg.navOrder
+    .map((id) => navItems.find((n) => n.id === id))
+    .filter((n): n is { id: NavTab; label: string; icon: React.ElementType; badge?: string } => !!n);
   const [workspaceExpanded, setWorkspaceExpanded] = useState(false);
   const [createWsOpen, setCreateWsOpen] = useState(false);
   const [wsName, setWsName] = useState('');
@@ -88,7 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
           </div>
 
           <nav className="space-y-1">
-            {navItems.map((item) => {
+            {sortedNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (

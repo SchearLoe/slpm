@@ -8,12 +8,15 @@ import { clsx } from 'clsx';
 import { listItemVariants, springSoft } from '@/lib/motion';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { useTasks } from '@/lib/queries';
+import { getRoleConfig } from '@/lib/roleConfig';
 
 export const TaskGroupList: React.FC = () => {
-  const { selectedTask, setSelectedTask, setIsNewTaskOpen } = useApp();
+  const { selectedTask, setSelectedTask, setIsNewTaskOpen, currentRole } = useApp();
   const { user } = useAuth();
   const { data: tasks = [] } = useTasks();
-  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'assigned' | 'participated'>('all');
+  // P2-1：默认筛选按角色
+  const roleCfg = getRoleConfig(currentRole);
+  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'assigned' | 'participated' | 'phase-qa'>(roleCfg.defaultTaskFilter);
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState<'priority' | 'time'>('priority');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -22,9 +25,9 @@ export const TaskGroupList: React.FC = () => {
 
   const filteredTasks = tasks.filter((t) => {
     if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-    // 用当前登录用户判断，替代原硬编码 'Brandon'
     if (activeFilterTab === 'assigned' && t.assigneeId !== user?.id) return false;
     if (activeFilterTab === 'participated' && t.assigneeId === user?.id) return false;
+    if (activeFilterTab === 'phase-qa' && t.phase !== '测试验证') return false;
     return true;
   });
 
@@ -32,6 +35,7 @@ export const TaskGroupList: React.FC = () => {
     { id: 'all' as const, label: '全部任务' },
     { id: 'assigned' as const, label: '我负责的' },
     { id: 'participated' as const, label: '我参与的' },
+    { id: 'phase-qa' as const, label: '测试验证' },
   ];
 
   return (

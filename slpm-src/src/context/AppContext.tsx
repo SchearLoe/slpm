@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CardDeckItem, TaskItem, UserSettings, WorkspaceMembership } from '@/types';
+import { CardDeckItem, TaskItem, UserSettings, WorkspaceMembership, WsRole } from '@/types';
 import { useAuth } from './AuthContext';
 import { api, workspaceStore } from '@/lib/api';
 
@@ -55,7 +55,7 @@ interface AppContextType {
   // currentRole：当前工作区的角色（admin/member），供 UI 按钮禁用
   workspaces: WorkspaceMembership[];
   currentWorkspace: WorkspaceMembership | null;
-  currentRole: 'admin' | 'member' | null;
+  currentRole: WsRole | null;
   setCurrentWorkspace: (id: string) => void;
   addWorkspace: (name: string) => Promise<WorkspaceMembership>;
 
@@ -101,7 +101,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [workspaces, currentWorkspaceId]);
 
   // 当前工作区的角色（admin/member），供 UI 按钮禁用
-  const currentRole: 'admin' | 'member' | null = currentWorkspace?.role ?? null;
+  const currentRole: WsRole | null = currentWorkspace?.role ?? null;
 
   // 用户登录/恢复会话带来 workspaces 时，确保 localStorage 与实际选中同步
   useEffect(() => {

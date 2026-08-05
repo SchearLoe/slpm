@@ -35,18 +35,16 @@ export const requireWorkspace = asyncHandler(async (req: Request, _res: Response
 
   req.workspace = {
     id: workspaceId,
-    role: membership.role as 'admin' | 'member',
+    role: membership.role, // P2-1: admin | pm | dev | qa
   };
   next();
 });
 
 /**
- * P1-2：角色校验中间件工厂。
- *
- * 用法：router.post('/members', requireAuth, requireWorkspace, requireRole('admin'), handler)
- * 当前用户在工作区的角色不在允许列表内 → 403。
+ * 角色校验中间件工厂。
+ * 用法：requireRole('admin') 或 requireRole('pm', 'admin')
  */
-export function requireRole(...roles: ('admin' | 'member')[]) {
+export function requireRole(...roles: string[]) {
   return (_req: Request, _res: Response, next: NextFunction) => {
     if (!_req.workspace || !roles.includes(_req.workspace.role)) {
       return next(new ApiError(403, `需要 ${roles.join('/')} 权限`));
@@ -54,3 +52,6 @@ export function requireRole(...roles: ('admin' | 'member')[]) {
     next();
   };
 }
+
+/** P2-1：工作区管理员校验（仅 role=admin 可通过） */
+export const requireAdmin = requireRole('admin');

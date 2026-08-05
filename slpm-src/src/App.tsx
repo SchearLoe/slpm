@@ -13,6 +13,7 @@ import { SettingsCenterPage } from '@/pages/SettingsCenterPage';
 import { NewTaskModal } from '@/components/modals/NewTaskModal';
 import { EditTaskModal } from '@/components/modals/EditTaskModal';
 import { NavTab } from '@/types';
+import { getRoleConfig } from '@/lib/roleConfig';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { RouteTransition } from '@/components/ui/PageTransition';
 import { RequireAuth } from '@/components/RequireAuth';
@@ -43,9 +44,17 @@ const PATH_TO_TAB: Record<string, NavTab> = {
 function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isNewTaskOpen, setIsNewTaskOpen } = useApp();
+  const { isNewTaskOpen, setIsNewTaskOpen, currentRole } = useApp();
   const prevTabIndex = useRef(0);
   const [direction, setDirection] = useState(1);
+
+  // P2-1：根据角色着陆页重定向（仅根路径 / 时触发）
+  const roleCfg = getRoleConfig(currentRole);
+  React.useEffect(() => {
+    if (location.pathname === '/') {
+      navigate(`/${roleCfg.landingPage}`, { replace: true });
+    }
+  }, [location.pathname, roleCfg.landingPage, navigate]);
 
   // 从 URL 推导当前 NavTab
   const activeTab = PATH_TO_TAB[location.pathname] ?? 'tasks';

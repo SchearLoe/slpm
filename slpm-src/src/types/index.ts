@@ -8,6 +8,9 @@ export type NavTab =
   | 'knowledge'
   | 'settings';
 
+// P2-1：职能角色
+export type WsRole = 'admin' | 'pm' | 'dev' | 'qa';
+
 export type Priority = '高' | '中' | '低' | '高优先级' | '紧急';
 export type TaskStatus = '进行中' | '已完成' | '待处理' | '已延期';
 
@@ -36,7 +39,7 @@ export interface WorkspaceMembership {
   id: string;
   name: string;
   slug: string;
-  role: 'admin' | 'member';
+  role: WsRole;
 }
 
 export interface WorkspaceMember {
@@ -45,7 +48,7 @@ export interface WorkspaceMember {
   name: string;
   avatar: string | null;
   email: string;
-  role: 'admin' | 'member';
+  role: WsRole;
 }
 
 // ============ 后端任务 assignee（关系化外键） ============

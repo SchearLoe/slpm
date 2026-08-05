@@ -9,6 +9,8 @@ import { useApp } from '@/context/AppContext';
 import { springSoft } from '@/lib/motion';
 import { useTasks, useWorkspaceMembers, useInviteMember, useRemoveMember, useUpdateMemberRole } from '@/lib/queries';
 import { apiError } from '@/lib/api';
+import { ROLE_OPTIONS, getRoleConfig } from '@/lib/roleConfig';
+import { WsRole } from '@/types';
 
 export const TeamCollaborationPage: React.FC = () => {
   const { show, ToastEl } = useToast();
@@ -42,7 +44,7 @@ export const TeamCollaborationPage: React.FC = () => {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [msgOpen, setMsgOpen] = useState<(typeof members)[number] | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
+  const [inviteRole, setInviteRole] = useState<WsRole>('dev');
   const [msgText, setMsgText] = useState('');
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -68,10 +70,10 @@ export const TeamCollaborationPage: React.FC = () => {
     }
   };
 
-  const handleRoleChange = async (userId: string, role: 'admin' | 'member', name: string) => {
+  const handleRoleChange = async (userId: string, role: WsRole, name: string) => {
     try {
       await updateRoleMut.mutateAsync({ userId, role });
-      show(`${name} 的角色已切换为 ${role === 'admin' ? '管理员' : '成员'}`);
+      show(`${name} 的角色已切换为 ${getRoleConfig(role).label}`);
     } catch (err) {
       show(apiError(err, '角色切换失败'));
     }
@@ -132,13 +134,9 @@ export const TeamCollaborationPage: React.FC = () => {
                     </div>
                   </div>
                   <span
-                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-medium shrink-0 ${
-                      isAdmin
-                        ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                        : 'bg-white/5 text-white/40 border border-white/10'
-                    }`}
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-medium shrink-0 border ${getRoleConfig(member.role).color} border-white/10`}
                   >
-                    {isAdmin ? '管理员' : '成员'}
+                    {getRoleConfig(member.role).label}
                   </span>
                 </div>
 
@@ -154,23 +152,13 @@ export const TeamCollaborationPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-end gap-2">
-                  {canManage && !isAdmin && (
-                    <button
-                      onClick={() => handleRoleChange(member.userId, 'admin', member.name)}
-                      className="liquid-btn-ghost h-9 px-3 rounded-xl flex items-center gap-1.5 text-[11px] text-white/60 hover:text-emerald-300"
-                      title="提升为管理员"
-                    >
-                      <UserCheck className="w-3.5 h-3.5" /> 设为管理员
-                    </button>
-                  )}
-                  {canManage && isAdmin && (
-                    <button
-                      onClick={() => handleRoleChange(member.userId, 'member', member.name)}
-                      className="liquid-btn-ghost h-9 px-3 rounded-xl flex items-center gap-1.5 text-[11px] text-white/60 hover:text-white"
-                      title="降为成员"
-                    >
-                      降为成员
-                    </button>
+                  {canManage && (
+                    <LiquidSelect
+                      value={member.role}
+                      onChange={(v) => handleRoleChange(member.userId, v as WsRole, member.name)}
+                      variant="pill"
+                      options={ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))}
+                    />
                   )}
                   <button
                     onClick={() => {
@@ -229,11 +217,8 @@ export const TeamCollaborationPage: React.FC = () => {
           />
           <LiquidSelect
             value={inviteRole}
-            onChange={(v) => setInviteRole(v as 'admin' | 'member')}
-            options={[
-              { value: 'member', label: '成员（可 CRUD 工作区内资源）' },
-              { value: 'admin', label: '管理员（可邀请/移除成员）' },
-            ]}
+            onChange={(v) => setInviteRole(v as WsRole)}
+            options={ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))}
           />
         </form>
       </LiquidModal>

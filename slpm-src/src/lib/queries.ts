@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
-import { TaskItem, TaskComment, TaskActivityEntry, WorkspaceMembership, WorkspaceMember, KnowledgeArticle, ArticleCategory, FileRecord, AppNotification, AiConfig, AiSuggestionResult, AiUsageSummary } from '@/types';
+import { TaskItem, TaskComment, TaskActivityEntry, WorkspaceMembership, WorkspaceMember, KnowledgeArticle, ArticleCategory, FileRecord, AppNotification, AiConfig, AiSuggestionResult, AiUsageSummary, WsRole } from '@/types';
 
 // ============ 任务 ============
 
@@ -228,7 +228,7 @@ export function useWorkspaceMembers(workspaceId: string | undefined) {
 export function useInviteMember(workspaceId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ email, role }: { email: string; role: 'admin' | 'member' }) => {
+    mutationFn: async ({ email, role }: { email: string; role: WsRole }) => {
       const res = await api.post<{ member: WorkspaceMember }>(`/workspaces/${workspaceId}/members`, {
         email,
         role,
@@ -245,7 +245,7 @@ export function useInviteMember(workspaceId: string | undefined) {
 export function useUpdateMemberRole(workspaceId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: 'admin' | 'member' }) => {
+    mutationFn: async ({ userId, role }: { userId: string; role: WsRole }) => {
       await api.patch(`/workspaces/${workspaceId}/members/${userId}`, { role });
     },
     onSuccess: () => {

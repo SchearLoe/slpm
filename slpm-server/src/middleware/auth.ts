@@ -11,7 +11,7 @@ declare global {
       // P1-2：当前请求的工作区上下文（由 requireWorkspace 中间件填充）
       workspace?: {
         id: string;
-        role: 'admin' | 'member';
+        role: string; // P2-1: admin | pm | dev | qa
       };
     }
   }
