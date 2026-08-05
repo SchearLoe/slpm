@@ -1,0 +1,33 @@
+# 备选方案：用 Docker 运行 PostgreSQL
+# 适用：本机未装 PostgreSQL，或想用容器隔离环境
+#
+# 用法（需先安装 Docker Desktop）：
+#   docker compose up -d        启动 PostgreSQL
+#   docker compose down          停止
+#
+# 启动后，把 wenxibuddy-server/.env 的 DATABASE_URL 改为：
+#   postgresql://wenxi:wenxi123@localhost:5432/wenxibuddy?schema=public
+
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wenxibuddy-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wenxi
+      POSTGRES_PASSWORD: wenxi123
+      POSTGRES_DB: wenxibuddy
+    ports:
+      - '5432:5432'
+    volumes:
+      - wenxibuddy_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U wenxi -d wenxibuddy']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  wenxibuddy_pgdata:

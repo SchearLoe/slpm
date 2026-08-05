@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="url(#g)"/>
+  <text x="32" y="40" text-anchor="middle" font-family="Arial Black, sans-serif" font-size="18" font-weight="800" fill="#04120c">SLPM</text>
+  <defs>
+    <linearGradient id="g" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34d399"/>
+      <stop offset="1" stop-color="#0d9488"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -1,0 +1,338 @@
+// WenXiBuddy 数据库模型
+// 数据库：PostgreSQL 16
+// 说明：为个人使用起步设计，预留 owner/workspace 关系以便后续扩展团队版
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ 用户与认证 ============
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  avatar       String?  // 首字母自动生成（如 BR），第二期支持真实头像
+  role         String   @default("成员") // 个人版固定，团队版用：管理员/成员/只读
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 关系：当前用户拥有的任务（创建者）
+  ownedTasks Task[] @relation("TaskOwner")
+  // 关系：分配给当前用户的任务
+  assignedTasks Task[] @relation("TaskAssignee")
+
+  schedules ScheduleEvent[]
+  settings  UserSettings?
+
+  // P1-1：任务评论 / 活动流的作者关系（命名关系，与 Task 的多个 User 关系区分）
+  comments   TaskComment[]  @relation("TaskCommentAuthor")
+  activities TaskActivity[] @relation("TaskActivityActor")
+
+  // P1-2：工作区成员关系
+  memberships WorkspaceMember[]
+
+  // P1-3：知识库文章的作者关系
+  articles KnowledgeArticle[] @relation("KnowledgeArticleAuthor")
+
+  // P1-3：上传文件的作者关系
+  uploadedFiles FileRecord[] @relation("FileUploader")
+
+  // P1-5：AI 调用 token 用量记录（best-effort，失败不影响主流程）
+  aiUsage AiUsageRecord[] @relation("AiUsageUser")
+
+  // P1-4：收到的通知（站内信）
+  notifications Notification[]
+}
+
+model UserSettings {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accentColor    String  @default("emerald") // emerald | cyan | purple
+  glassBlur      String  @default("ultra") // standard | ultra | max
+  enableConfetti Boolean @default(true)
+  updatedAt      DateTime @updatedAt
+}
+
+// ============ 任务 ============
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @default("")
+  // 阶段（标准化枚举值，原 demo 的中文）
+  phase       String   @default("需求评审") // 需求评审 | 产品设计 | 开发实现 | 测试验证
+  // 优先级（标准化，剔除原 demo 里 '高优先级'/'紧急' 等杂质值）
+  priority    String   @default("中") // 高 | 中 | 低
+  status      String   @default("进行中") // 进行中 | 已完成 | 待处理 | 已延期
+  deadline    DateTime?
+  // P1-6：甘特图 + 任务依赖
+  startDate   DateTime?             // 甘特起始日（无此值则不显示条）
+  milestone   Boolean  @default(false)
+  parentId    String?               // 父任务（自引用，子任务展示层级）
+  parent      Task?    @relation("TaskHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  tags        String[] // PostgreSQL 原生数组
+
+  // 关系化：指派人从原 demo 的嵌入式对象改为外键
+  assigneeId String?
+  assignee   User?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  // 创建者（所有者）—— 为团队版多租户隔离埋伏笔
+  ownerId String
+  owner   User    @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // P1-2：所属工作区（backfill 后改为 NOT NULL）
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([phase])
+  @@index([workspaceId])
+
+  // P1-1：反向关系（任务删除时级联清理评论/活动）
+  comments   TaskComment[]
+  activities TaskActivity[]
+  // P1-6：任务依赖 + 层级
+  children   Task[]           @relation("TaskHierarchy")
+  blockedBy  TaskDependency[] @relation("BlockedBy")
+  blocks     TaskDependency[] @relation("Blocks")
+}
+
+// ============ 任务评论（P1-1） ============
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  body      String   // 正文（纯文本，前端做 @ 高亮）
+  mentions  String[] // 解析自 body 的 @ 用户名数组（为通知系统预留）
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([authorId])
+}
+
+// ============ 任务活动流（P1-1） ============
+// 自动写入：create/update/complete/发表评论
+
+model TaskActivity {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User     @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
+  action    String   // 创建任务 | 完成任务 | 更新字段 | 发表评论
+  detail    String?  // 变更详情，如 "优先级：中 → 高"
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([actorId])
+}
+
+// ============ 任务阻塞依赖（P1-6 甘特图） ============
+
+model TaskDependency {
+  id              String @id @default(cuid())
+  taskId          String
+  task            Task   @relation("BlockedBy", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnTaskId String
+  dependsOnTask   Task   @relation("Blocks", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@index([dependsOnTaskId])
+}
+
+// ============ 日程 ============
+
+model ScheduleEvent {
+  id        String  @id @default(cuid())
+  title     String
+  // 真实时间戳，替代原 demo 的 startHour/day 字符串模型
+  // 解决原版"只能 5 月"的硬编码问题，支持任意月份/年份
+  startTime DateTime
+  endTime   DateTime
+  location  String?
+  priority  String  @default("中") // 高 | 中 | 低
+  attendees String[] // 参会人姓名（第二期改为 User 外键）
+  status    String  @default("待开始") // 待开始 | 进行中 | 已结束
+
+  ownerId String
+  owner   User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // P1-2：所属工作区（backfill 后改为 NOT NULL）
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([startTime])
+  @@index([workspaceId])
+}
+
+// ============ 工作区 / 成员（P1-2 多租户 + RBAC） ============
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique // URL 友好标识（cuid 兜底唯一）
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   WorkspaceMember[]
+  tasks     Task[]
+  schedules ScheduleEvent[]
+  articles  KnowledgeArticle[]
+  files     FileRecord[]
+  // P1-4：工作区内产生的通知
+  notifications Notification[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String    @default("member") // admin | member
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, userId]) // 一个用户在一个工作区只有一条成员记录
+  @@index([userId])
+}
+
+// ============ 知识库文章（P1-3） ============
+
+model KnowledgeArticle {
+  id          String   @id @default(cuid())
+  title       String
+  body        String   @default("") // 正文（纯文本/markdown，前端展示）
+  category    String   @default("UI/UX 规范") // UI/UX 规范 | 技术架构 | 团队流程 | 质量保障
+  starredByIds String[] @default([]) // 收藏该文章的用户 id 列表（PG 原生数组）
+  views       Int      @default(0) // 浏览量（发布时初始为 1）
+  pinned      Boolean  @default(false) // 是否置顶（工作区内唯一置顶可选，这里仅作标记）
+
+  // 作者（创建者）外键
+  authorId String
+  author   User    @relation("KnowledgeArticleAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  // P1-3：所属工作区（与 Task/Schedule 一致的多租户隔离）
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([authorId])
+  @@index([category])
+}
+
+// ============ 文件记录（P1-3 真实文件上传） ============
+
+model FileRecord {
+  id           String   @id @default(cuid())
+  title        String // 用户填的标题（默认用原始文件名）
+  originalName String // 原始文件名
+  mimeType     String
+  size         Int // 字节数
+  storagePath  String // uploads/<workspaceId>/<uuid>.<ext> 相对路径
+  category     String   @default("通用文档")
+  tags         String[] @default([])
+  uploaderId   String
+  uploader     User      @relation("FileUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  // P1-6：版本号（同名文件重传时递增，旧记录存 FileVersion）
+  currentVersion Int      @default(1)
+
+  versions     FileVersion[]
+
+  @@index([workspaceId])
+  @@index([uploaderId])
+}
+
+// ============ 文件版本历史（P1-6） ============
+
+model FileVersion {
+  id           String   @id @default(cuid())
+  fileId       String
+  file         FileRecord @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  version      Int
+  originalName String
+  mimeType     String
+  size         Int
+  storagePath  String
+  createdAt    DateTime @default(now())
+
+  @@index([fileId])
+  @@unique([fileId, version])
+}
+
+// ============ 通知（P1-4 站内信） ============
+// 消费 TaskComment.mentions（评论 @某人）+ 任务指派变更，作为收件人的站内消息。
+// 本期不做 WebSocket，前端用短轮询拉取（refetchInterval）。
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String // 收件人（被 @ 或被指派的人）
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // 触发来源的工作区（便于将来按工作区过滤；本期按用户全局收发）
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  type        String // mention | assign | system
+  title       String // 展示标题（如「张三 在任务中提到了你」）
+  body        String? // 展示正文摘要（如评论片段）
+  // 点击跳转目标（前端用它 deep-link 到对应任务）
+  taskId      String?
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, read])
+  @@index([workspaceId])
+}
+
+// ============ 系统配置（P1-4 全局单例，存 AI 配置等） ============
+
+model SystemConfig {
+  id            String   @id @default("singleton") // 固定 id，全局唯一
+  aiBaseUrl     String   @default("") // OpenAI 兼容 baseURL，如 https://api.openai.com/v1
+  aiApiKey      String   @default("") // AES-256-GCM 加密后的密文
+  aiModel       String   @default("gpt-4o-mini")
+  aiTemperature Float    @default(0.4)
+  updatedAt     DateTime @updatedAt
+}
+
+// ============ AI 用量记录（P1-5 token 统计） ============
+
+model AiUsageRecord {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation("AiUsageUser", fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId      String
+  endpoint         String // 'suggest' | 'suggest-stream' | 'test'
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([createdAt])
+}

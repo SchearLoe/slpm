@@ -1,0 +1,529 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-void: #000000;
+  --color-ink: #05070c;
+  --color-glass: rgba(255, 255, 255, 0.045);
+  --color-glass-strong: rgba(255, 255, 255, 0.08);
+  --color-edge: rgba(255, 255, 255, 0.14);
+  --color-edge-soft: rgba(255, 255, 255, 0.07);
+  --color-neon: #22c55e;
+  --blur-liquid: 40px;
+  --radius-glass: 22px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: #000;
+    color: rgba(255, 255, 255, 0.92);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+
+  * {
+    border-color: var(--color-edge-soft);
+    box-sizing: border-box;
+  }
+
+  ::selection {
+    background: rgba(34, 197, 94, 0.28);
+    color: #ecfdf5;
+  }
+}
+
+/* Scrollbars — thin liquid */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 197, 94, 0.45);
+}
+
+/* ========== Liquid Glass System ========== */
+
+.liquid-shell {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse 60% 50% at 15% 20%, rgba(16, 185, 129, 0.08), transparent 55%),
+    radial-gradient(ellipse 50% 45% at 85% 15%, rgba(56, 189, 248, 0.05), transparent 50%),
+    radial-gradient(ellipse 45% 40% at 70% 85%, rgba(16, 185, 129, 0.06), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 30% 75%, rgba(99, 102, 241, 0.04), transparent 50%),
+    #000;
+}
+
+.liquid-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.03) 0.6px, transparent 0.6px);
+  background-size: 3px 3px;
+  opacity: 0.35;
+  mix-blend-mode: soft-light;
+}
+
+/* Core liquid glass material */
+.liquid-glass {
+  position: relative;
+  background:
+    linear-gradient(
+      165deg,
+      rgba(255, 255, 255, 0.09) 0%,
+      rgba(255, 255, 255, 0.03) 35%,
+      rgba(255, 255, 255, 0.015) 70%,
+      rgba(255, 255, 255, 0.04) 100%
+    ),
+    rgba(12, 16, 28, 0.28);
+  backdrop-filter: blur(var(--blur-liquid)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--blur-liquid)) saturate(160%);
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--radius-glass);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.18) inset,
+    0 -1px 0 0 rgba(0, 0, 0, 0.35) inset,
+    0 18px 50px -12px rgba(0, 0, 0, 0.65),
+    0 4px 16px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.35s ease,
+    border-color 0.35s ease;
+}
+
+/* Specular rim + caustic sheen */
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      125deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.05) 18%,
+      transparent 42%,
+      transparent 68%,
+      rgba(255, 255, 255, 0.04) 100%
+    );
+  opacity: 0.85;
+  mix-blend-mode: screen;
+}
+
+.liquid-glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 0 24px rgba(255, 255, 255, 0.03);
+}
+
+.liquid-glass-hover:hover {
+  transform: translateY(-2px) scale(1.005);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.28) inset,
+    0 -1px 0 0 rgba(0, 0, 0, 0.35) inset,
+    0 24px 60px -12px rgba(0, 0, 0, 0.7),
+    0 0 30px rgba(34, 197, 94, 0.08);
+  background:
+    linear-gradient(
+      165deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.04) 40%,
+      rgba(255, 255, 255, 0.02) 100%
+    ),
+    rgba(16, 22, 36, 0.38);
+}
+
+.liquid-glass-active {
+  background:
+    linear-gradient(
+      165deg,
+      rgba(34, 197, 94, 0.16) 0%,
+      rgba(255, 255, 255, 0.05) 40%,
+      rgba(12, 16, 28, 0.35) 100%
+    );
+  box-shadow:
+    0 0 0 1px rgba(34, 197, 94, 0.28) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.2) inset,
+    0 0 28px rgba(34, 197, 94, 0.18),
+    0 18px 50px -12px rgba(0, 0, 0, 0.65);
+}
+
+.liquid-pill {
+  position: relative;
+  background: rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.liquid-icon-well {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.liquid-input {
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.liquid-input:focus {
+  outline: none;
+  border-color: rgba(34, 197, 94, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 3px rgba(34, 197, 94, 0.12),
+    0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.liquid-btn-primary {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 45%, #059669 100%);
+  color: #04120c;
+  border: 1px solid rgba(167, 243, 208, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(16, 185, 129, 0.2),
+    0 0 24px rgba(16, 185, 129, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease, filter 0.2s ease;
+}
+
+.liquid-btn-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgba(16, 185, 129, 0.3),
+    0 0 32px rgba(16, 185, 129, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.liquid-btn-ghost {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.liquid-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Frosted document card for coverflow */
+.frost-card {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 50%, rgba(180, 200, 220, 0.06) 100%);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+    0 20px 40px rgba(0, 0, 0, 0.45);
+}
+
+.frost-card-active {
+  background:
+    linear-gradient(155deg, rgba(52, 211, 153, 0.55) 0%, rgba(16, 185, 129, 0.75) 40%, rgba(4, 120, 87, 0.85) 100%);
+  border: 1px solid rgba(167, 243, 208, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 0 40px rgba(16, 185, 129, 0.45),
+    0 24px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* ========== Framework frame layout（左右流体自适应） ========== */
+/*
+  整页随视口左右拉满：无固定 max-width 居中死板。
+  侧栏 / 主栏 / 详情栏均用 clamp + fr 随宽度伸缩。
+  空白 void 仍保留在组件内部，不靠砍掉左右边距制造留白。
+*/
+.app-frame {
+  display: grid;
+  /* 侧栏：窄屏 176 → 常规 ~14vw → 宽屏不超过 280 */
+  grid-template-columns: clamp(176px, 14vw, 280px) minmax(0, 1fr);
+  column-gap: clamp(10px, 1.2vw, 20px);
+  height: 100%;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: clamp(8px, 1.2vw, 18px) clamp(10px, 1.6vw, 24px);
+  min-height: 0;
+  box-sizing: border-box;
+  align-items: stretch;
+}
+
+.main-stack {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1vw, 14px);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+}
+
+/*
+  首页任务框架：左右同高 + 下对齐 + 横向流体
+  - 中栏 minmax(0,1fr) 吃剩余宽度
+  - 详情栏 clamp 随 vw 变宽，大屏可到 400px
+*/
+.tasks-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 24vw, 400px);
+  column-gap: clamp(10px, 1.2vw, 18px);
+  align-items: stretch;
+  min-height: 0;
+  flex: 1;
+  height: 100%;
+  width: 100%;
+}
+
+.tasks-left {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1vw, 14px);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.tasks-kpi {
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.tasks-right {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  align-self: stretch;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+}
+
+.tasks-right > * {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(8px, 0.9vw, 14px);
+  width: 100%;
+}
+
+/* 中部：看板 | 卡片堆 —— 两列都吃宽度，比例随屏变化 */
+.board-deck-row {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.05fr) minmax(240px, 1fr);
+  column-gap: clamp(10px, 1.2vw, 18px);
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.board-col {
+  min-height: 0;
+  height: 100%;
+}
+
+.board-body {
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+.deck-void {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  min-height: clamp(260px, 32vh, 360px);
+  background: transparent;
+  overflow: hidden;
+  isolation: isolate;
+  z-index: 1;
+  border-radius: 22px;
+  /* 禁止出现底部细滚动条/伪滚动条痕迹 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.deck-void::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.board-deck-row > * {
+  min-width: 0;
+}
+
+/* 时间线贴左侧底部，与右侧详情操作条下沿对齐 */
+.timeline-slot {
+  width: 100%;
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
+/* 超宽屏：侧栏与详情再略放宽，主区继续吃满 */
+@media (min-width: 1600px) {
+  .app-frame {
+    grid-template-columns: clamp(220px, 12vw, 300px) minmax(0, 1fr);
+    padding-left: clamp(16px, 2vw, 32px);
+    padding-right: clamp(16px, 2vw, 32px);
+  }
+  .tasks-frame {
+    grid-template-columns: minmax(0, 1fr) clamp(320px, 22vw, 440px);
+  }
+}
+
+@media (max-width: 1280px) {
+  .app-frame {
+    grid-template-columns: clamp(168px, 16vw, 220px) minmax(0, 1fr);
+  }
+  .tasks-frame {
+    grid-template-columns: 1fr;
+    height: auto;
+    align-items: start;
+  }
+  .tasks-left {
+    height: auto;
+  }
+  .tasks-right {
+    height: auto;
+    min-height: min(520px, 70vh);
+    width: 100%;
+  }
+  .board-deck-row {
+    min-height: 260px;
+    flex: 0 0 auto;
+  }
+  .deck-void {
+    min-height: 240px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .board-deck-row {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(220px, auto) minmax(220px, 280px);
+  }
+}
+
+@media (max-width: 900px) {
+  .app-frame {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    row-gap: clamp(8px, 1.5vw, 12px);
+  }
+  .kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .app-frame {
+    padding: 8px;
+  }
+  .kpi-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* stagger children helper */
+.stagger-children > * {
+  animation: riseIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0.02s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.06s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.10s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.14s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.18s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.22s; }
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.liquid-shimmer::before {
+  background-size: 200% 100%;
+  animation: shimmer 4.5s linear infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(1.06); }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 4.5s infinite ease-in-out;
+}
+
+.text-mute {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.text-soft {
+  color: rgba(255, 255, 255, 0.68);
+}

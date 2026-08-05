@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# P1-3: uploaded files (real user content, not committed)
+uploads/
+
+# ZCode sessions (local-only)
+.zcode/

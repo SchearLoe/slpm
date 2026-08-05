@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+*.log
+.DS_Store
+# P1-3：上传文件本地存储（不提交真实文件内容）
+uploads
+# 保留 prisma/migrations
