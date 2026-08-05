@@ -6,6 +6,25 @@
 
 ## 2026-08-05
 
+### P4-2（续）：产品线深化 —— 路线图 + 需求池 + 跨项目指派 + Release Notes
+
+**数据模型（1 迁移）**
+- ProductVersion 加 `releaseNotes String @default("")`（发布说明）
+
+**后端**
+- `product-version.routes.ts`：create/update/GET 均支持 `releaseNotes`
+- `product-dashboard.routes.ts`：新增 `PATCH /api/products/:id/tasks/:taskId` 产品级任务更新——跨项目指派负责人（目标必须是产品内成员，否则 400）/ 调整版本 / 状态 / 阶段 / 优先级；权限 = 产品级 po/admin 或任务所属工作区成员；指派变更走 notifyAssignment 通知
+
+**前端**
+- `ProductManagementPage.tsx` 从 3 Tab 扩展为 **5 Tab**：
+  - **需求池（Backlog）**：未关联版本的需求列表，每条可「分配版本 / 指派负责人」下拉（真实 API）
+  - **路线图（Roadmap）**：按版本开始/发布日期排布的横向时间轴（自动窗口缩放、状态着色、点击版本条查看需求）
+  - 版本管理：版本卡片展示「📝 发布说明」（多行）
+  - 任务详情弹窗：产品经理可跨项目指派负责人 / 分配版本 / 改状态（三个下拉，真实 API）
+- `queries.ts`：新增 useUpdateProductTask
+
+**验证**：前后端 tsc 零错误；API 冒烟通过（跨项目指派/排期到版本/非法指派 400 拦截）；浏览器 E2E 通过（5 Tab 渲染、需求池排期、路线图时间轴、发布说明展示）。测试数据已清理。
+
 ### P4-2：看板拖拽 + 任务工时/燃尽图 + 日程冲突预警 + 通知偏好
 
 **数据模型（1 迁移，1 新字段 + 3 设置字段）**

@@ -291,6 +291,7 @@ export interface ProductVersion {
   id: string;
   name: string;
   description: string;
+  releaseNotes: string; // P4-2：发布说明
   status: ProductVersionStatus;
   startDate: string | null;
   releaseDate: string | null;

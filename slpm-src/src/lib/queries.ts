@@ -852,6 +852,22 @@ export function useProductStats(productId: string | undefined) {
   });
 }
 
+// P4-2：产品级任务更新（跨项目指派负责人 / 版本 / 状态 / 阶段）
+export function useUpdateProductTask(productId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ taskId, ...updates }: { taskId: string } & Partial<Pick<ProductTaskItem, 'assigneeId' | 'status' | 'phase' | 'priority' | 'productVersionId'>>) => {
+      const res = await api.patch<{ task: ProductTaskItem }>(`/products/${productId}/tasks/${taskId}`, updates);
+      return res.data.task;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['product-tasks', productId] });
+      qc.invalidateQueries({ queryKey: ['product-members', productId] });
+      qc.invalidateQueries({ queryKey: ['product-stats', productId] });
+    },
+  });
+}
+
 /**
  * P1-5：流式 AI 建议调用（fetch + ReadableStream，逐 delta 回调）。
  * 后端返回 SSE：data: {"delta":"..."} / {"done":true,"confidence":N} / {"error":"..."}

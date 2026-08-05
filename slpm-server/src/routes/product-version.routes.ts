@@ -28,6 +28,7 @@ router.get(
         id: v.id,
         name: v.name,
         description: v.description,
+        releaseNotes: v.releaseNotes,
         status: v.status,
         startDate: v.startDate,
         releaseDate: v.releaseDate,
@@ -44,6 +45,7 @@ router.get(
 const createVersionSchema = z.object({
   name: z.string().min(1, '版本号必填').max(40),
   description: z.string().max(500).optional().default(''),
+  releaseNotes: z.string().max(5000).optional().default(''),
   status: z.enum(VERSION_STATUS).optional().default('planning'),
   startDate: z.string().datetime().optional().nullable(),
   releaseDate: z.string().datetime().optional().nullable(),
@@ -66,6 +68,7 @@ router.post(
           productId: req.product!.productId,
           name: d.name,
           description: d.description,
+          releaseNotes: d.releaseNotes,
           status: d.status,
           startDate: d.startDate ? new Date(d.startDate) : null,
           releaseDate: d.releaseDate ? new Date(d.releaseDate) : null,
@@ -86,6 +89,7 @@ router.post(
 const updateVersionSchema = z.object({
   name: z.string().min(1, '版本号必填').max(40).optional(),
   description: z.string().max(500).optional(),
+  releaseNotes: z.string().max(5000).optional(),
   status: z.enum(VERSION_STATUS).optional(),
   startDate: z.string().datetime().optional().nullable(),
   releaseDate: z.string().datetime().optional().nullable(),
@@ -110,6 +114,7 @@ router.patch(
     const data: Record<string, unknown> = {};
     if (d.name !== undefined) data.name = d.name;
     if (d.description !== undefined) data.description = d.description;
+    if (d.releaseNotes !== undefined) data.releaseNotes = d.releaseNotes;
     if (d.status !== undefined) data.status = d.status;
     if (d.startDate !== undefined) data.startDate = d.startDate ? new Date(d.startDate) : null;
     if (d.releaseDate !== undefined) data.releaseDate = d.releaseDate ? new Date(d.releaseDate) : null;
@@ -147,11 +152,12 @@ router.delete(
 );
 
 // 序列化（含任务数）
-function serialize(v: { id: string; name: string; description: string; status: string; startDate: Date | null; releaseDate: Date | null; order: number; createdAt: Date; updatedAt: Date; _count: { tasks: number } }) {
+function serialize(v: { id: string; name: string; description: string; releaseNotes: string; status: string; startDate: Date | null; releaseDate: Date | null; order: number; createdAt: Date; updatedAt: Date; _count: { tasks: number } }) {
   return {
     id: v.id,
     name: v.name,
     description: v.description,
+    releaseNotes: v.releaseNotes,
     status: v.status,
     startDate: v.startDate,
     releaseDate: v.releaseDate,

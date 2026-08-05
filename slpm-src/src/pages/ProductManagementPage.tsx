@@ -19,6 +19,8 @@ import {
   Pencil,
   Trash2,
   X,
+  Inbox,
+  Map,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
@@ -42,6 +44,7 @@ import {
   useUnlinkWorkspace,
   useUpdateProduct,
   useCreateProduct,
+  useUpdateProductTask,
 } from '@/lib/queries';
 import { ProductTaskItem, ProductVersion, ProductVersionStatus, WsRole } from '@/types';
 
@@ -101,6 +104,7 @@ function VersionFormModal({
   const updateVersion = useUpdateProductVersion(productId);
   const [name, setName] = useState(initial.name ?? '');
   const [description, setDescription] = useState(initial.description ?? '');
+  const [releaseNotes, setReleaseNotes] = useState(initial.releaseNotes ?? '');
   const [status, setStatus] = useState<ProductVersionStatus>(initial.status ?? 'planning');
   const [startDate, setStartDate] = useState(initial.startDate ? initial.startDate.slice(0, 10) : '');
   const [releaseDate, setReleaseDate] = useState(initial.releaseDate ? initial.releaseDate.slice(0, 10) : '');
@@ -112,6 +116,7 @@ function VersionFormModal({
     if (open) {
       setName(initial.name ?? '');
       setDescription(initial.description ?? '');
+      setReleaseNotes(initial.releaseNotes ?? '');
       setStatus(initial.status ?? 'planning');
       setStartDate(initial.startDate ? initial.startDate.slice(0, 10) : '');
       setReleaseDate(initial.releaseDate ? initial.releaseDate.slice(0, 10) : '');
@@ -128,6 +133,7 @@ function VersionFormModal({
       const payload = {
         name: name.trim(),
         description,
+        releaseNotes,
         status,
         startDate: startDate ? new Date(startDate).toISOString() : null,
         releaseDate: releaseDate ? new Date(releaseDate).toISOString() : null,
@@ -194,6 +200,11 @@ function VersionFormModal({
           <label className="text-[11px] text-white/40 mb-1.5 block">描述</label>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="版本说明 / 变更范围" className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white resize-none" />
         </div>
+        {/* P4-2：发布说明（Release Notes，发布后展示给团队） */}
+        <div>
+          <label className="text-[11px] text-white/40 mb-1.5 block">发布说明（Release Notes）</label>
+          <textarea value={releaseNotes} onChange={(e) => setReleaseNotes(e.target.value)} rows={4} placeholder={"新功能 / 修复 / 已知问题，每行一条。发布后在版本卡片中展示。"} className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white resize-none" />
+        </div>
       </form>
     </LiquidModal>
   );
@@ -203,7 +214,7 @@ export const ProductManagementPage: React.FC = () => {
   const { show, ToastEl } = useToast();
   const navigate = useNavigate();
   const { currentProduct, products, workspaces, setCurrentWorkspace, setCurrentProduct } = useApp();
-  const [tab, setTab] = useState<'requirements' | 'versions' | 'team'>('requirements');
+  const [tab, setTab] = useState<'requirements' | 'backlog' | 'roadmap' | 'versions' | 'team'>('requirements');
 
   const productId = currentProduct?.id;
   // P3：产品级写权限（po/admin）
@@ -213,6 +224,42 @@ export const ProductManagementPage: React.FC = () => {
   const { data: versions = [] } = useProductVersions(productId);
   const { data: stats } = useProductStats(productId);
   const { data: members = [] } = useProductMembers(productId);
+
+  // P4-2：需求池（未关联版本的需求）+ 跨项目指派
+  const { data: allProductTasks = [] } = useProductTasks(productId);
+  const backlogTasks = allProductTasks.filter((t) => !t.productVersionId);
+  const updateProductTask = useUpdateProductTask(productId);
+
+  // P4-2：路线图时间轴窗口（有日期的版本范围）
+  const roadmap = useMemo(() => {
+    const dated = versions.filter((v) => v.startDate || v.releaseDate);
+    if (dated.length === 0) return null;
+    const times = dated
+      .flatMap((v) => [v.startDate, v.releaseDate])
+      .filter((d): d is string => !!d)
+      .map((d) => new Date(d).getTime());
+    const min = Math.min(...times);
+    const max = Math.max(...times);
+    return { min, max, span: Math.max(1, max - min) };
+  }, [versions]);
+
+  // P4-2：需求池排期 / 指派
+  const assignVersion = async (task: ProductTaskItem, versionId: string) => {
+    try {
+      await updateProductTask.mutateAsync({ taskId: task.id, productVersionId: versionId || null });
+      show(`已${versionId ? '排期到版本' : '取消版本'}：${task.title}`);
+    } catch (err) {
+      show(apiError(err, '排期失败'));
+    }
+  };
+  const assignAssignee = async (task: ProductTaskItem, userId: string) => {
+    try {
+      await updateProductTask.mutateAsync({ taskId: task.id, assigneeId: userId || null });
+      show(`已${userId ? '指派给' : '取消指派'}：${task.title}`);
+    } catch (err) {
+      show(apiError(err, '指派失败'));
+    }
+  };
 
   // ---- 需求总览筛选 ----
   const [fWorkspace, setFWorkspace] = useState('');
@@ -240,6 +287,19 @@ export const ProductManagementPage: React.FC = () => {
   const [editDesc, setEditDesc] = useState('');
   const [savingProduct, setSavingProduct] = useState(false);
   const [linking, setLinking] = useState(false);
+
+  // P4-2：任务详情弹窗内的跨项目指派（负责人/版本/状态）
+  const changeTaskField = async (patch: Partial<ProductTaskItem>) => {
+    if (!taskDetail) return;
+    try {
+      const updated = await updateProductTask.mutateAsync({ taskId: taskDetail.id, ...patch });
+      setTaskDetail(updated);
+      // 同步刷新需求池/总览数据
+      show('已更新');
+    } catch (err) {
+      show(apiError(err, '更新失败'));
+    }
+  };
 
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -417,6 +477,8 @@ export const ProductManagementPage: React.FC = () => {
       <div className="liquid-pill p-1 inline-flex items-center gap-0.5">
         {([
           ['requirements', '需求总览', Layers],
+          ['backlog', '需求池', Inbox],
+          ['roadmap', '路线图', Map],
           ['versions', '版本管理', GitBranch],
           ['team', '团队视图', Users],
         ] as const).map(([id, label, Icon]) => (
@@ -515,7 +577,95 @@ export const ProductManagementPage: React.FC = () => {
           </div>
         )}
 
-        {/* ================= Tab 2：版本管理 ================= */}
+        {/* ================= Tab 2：需求池（Backlog，未排期需求） ================= */}
+        {tab === 'backlog' && (
+          <div className="space-y-3">
+            <GlassCard className="p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="text-[13px] font-bold text-white flex items-center gap-2">
+                  <Inbox className="w-4 h-4 text-emerald-300" /> 需求池
+                  <span className="text-[10px] font-normal text-white/30">未关联版本的需求 · 在此排期与指派</span>
+                </h3>
+                <span className="text-[10px] font-mono text-white/35">{backlogTasks.length} 条</span>
+              </div>
+              <div className="space-y-1.5">
+                {backlogTasks.map((t) => (
+                  <div key={t.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition-colors flex-wrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                    <span className="text-[12.5px] text-white/85 truncate flex-1 min-w-[160px]">{t.title}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/50 shrink-0">{t.workspace?.name}</span>
+                    <span className="text-[10px] text-white/40 shrink-0">{t.phase} · {t.priority}</span>
+                    <LiquidSelect
+                      variant="pill"
+                      value={t.productVersionId ?? ''}
+                      onChange={(v) => assignVersion(t, v)}
+                      placeholder="分配版本"
+                      options={[{ value: '', label: '不分配' }, ...versions.map((v) => ({ value: v.id, label: v.name }))]}
+                    />
+                    <LiquidSelect
+                      variant="pill"
+                      value={t.assigneeId ?? ''}
+                      onChange={(v) => assignAssignee(t, v)}
+                      placeholder="负责人"
+                      options={[{ value: '', label: '未指派' }, ...members.map((m) => ({ value: m.userId, label: m.name }))]}
+                    />
+                  </div>
+                ))}
+                {backlogTasks.length === 0 && (
+                  <div className="text-[12px] text-white/30 text-center py-8">需求池为空：所有需求都已排期，或暂无未关联版本的需求</div>
+                )}
+              </div>
+            </GlassCard>
+          </div>
+        )}
+
+        {/* ================= Tab 3：路线图（版本时间轴） ================= */}
+        {tab === 'roadmap' && (
+          <GlassCard className="p-5 space-y-4">
+            <h3 className="text-[13px] font-bold text-white flex items-center gap-2">
+              <Map className="w-4 h-4 text-emerald-300" /> 产品路线图
+              <span className="text-[10px] font-normal text-white/30">按版本开始/发布日期排布</span>
+            </h3>
+            {roadmap ? (
+              <>
+                <div className="flex items-center justify-between text-[10px] text-white/35 font-mono px-1">
+                  <span>{new Date(roadmap.min).toLocaleDateString('zh-CN')}</span>
+                  <span>{new Date(roadmap.max).toLocaleDateString('zh-CN')}</span>
+                </div>
+                <div className="space-y-2.5">
+                  {versions.map((v) => {
+                    const s = v.startDate ? new Date(v.startDate).getTime() : roadmap.min;
+                    const e = v.releaseDate ? new Date(v.releaseDate).getTime() : roadmap.max;
+                    const left = ((s - roadmap.min) / roadmap.span) * 100;
+                    const width = Math.max(3, ((e - s) / roadmap.span) * 100);
+                    const meta = VERSION_STATUS_META[v.status];
+                    return (
+                      <div key={v.id} className="flex items-center gap-3">
+                        <span className="w-16 text-[11px] font-bold text-white shrink-0 truncate">{v.name}</span>
+                        <div className="flex-1 relative h-7 bg-black/25 rounded-lg border border-white/[0.05]">
+                          <button
+                            onClick={() => setVersionTasksFor(v.id)}
+                            title={`${v.description}${v.releaseNotes ? `\n发布说明：${v.releaseNotes.slice(0, 80)}` : ''}`}
+                            className={`absolute top-1 bottom-1 rounded-md border flex items-center justify-center text-[10px] font-semibold text-white/90 overflow-hidden whitespace-nowrap transition-transform hover:scale-y-110 ${meta.cls}`}
+                            style={{ left: `${left}%`, width: `${width}%` }}
+                          >
+                            {v.taskCount} 需求
+                          </button>
+                        </div>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-md border shrink-0 ${meta.cls}`}>{meta.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-white/30">点击版本条查看该版本下的需求；未设置日期的版本按窗口首尾对齐。</p>
+              </>
+            ) : (
+              <p className="text-[12px] text-white/35 py-6 text-center">为版本设置「开始日期 / 发布日期」后，将在此显示路线图时间轴</p>
+            )}
+          </GlassCard>
+        )}
+
+        {/* ================= Tab 4：版本管理 ================= */}
         {tab === 'versions' && (
           <div className="space-y-3">
             {versions.length === 0 && (
@@ -558,6 +708,14 @@ export const ProductManagementPage: React.FC = () => {
                       </div>
 
                       {v.description && <p className="text-[11.5px] text-white/45">{v.description}</p>}
+
+                      {/* P4-2：发布说明（Release Notes） */}
+                      {v.releaseNotes && (
+                        <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                          <div className="text-[10px] font-semibold text-white/45 mb-1">📝 发布说明</div>
+                          <p className="text-[11px] text-white/60 whitespace-pre-wrap leading-relaxed">{v.releaseNotes}</p>
+                        </div>
+                      )}
 
                       <div className="flex items-center gap-4 text-[10px] text-white/35">
                         <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3" /> 开始 {v.startDate ? new Date(v.startDate).toLocaleDateString('zh-CN') : '—'}</span>
@@ -709,6 +867,38 @@ export const ProductManagementPage: React.FC = () => {
               <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/50">{taskDetail.priority} 优先级</span>
               {taskDetail.milestone && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-violet-400/15 text-violet-300 border border-violet-400/25">里程碑</span>}
             </div>
+
+            {/* P4-2：跨项目指派（负责人 / 版本 / 状态） */}
+            {isManager && (
+              <div className="flex flex-wrap items-center gap-2">
+                <LiquidSelect
+                  variant="pill"
+                  value={taskDetail.assigneeId ?? ''}
+                  onChange={(v) => changeTaskField({ assigneeId: v || null })}
+                  placeholder="指派负责人"
+                  options={[{ value: '', label: '未指派' }, ...members.map((m) => ({ value: m.userId, label: m.name }))]}
+                />
+                <LiquidSelect
+                  variant="pill"
+                  value={taskDetail.productVersionId ?? ''}
+                  onChange={(v) => changeTaskField({ productVersionId: v || null })}
+                  placeholder="分配版本"
+                  options={[{ value: '', label: '不分配' }, ...versions.map((v) => ({ value: v.id, label: v.name }))]}
+                />
+                <LiquidSelect
+                  variant="pill"
+                  value={taskDetail.status}
+                  onChange={(v) => changeTaskField({ status: v as ProductTaskItem['status'] })}
+                  options={[
+                    { value: '进行中', label: '进行中' },
+                    { value: '待处理', label: '待处理' },
+                    { value: '已完成', label: '已完成' },
+                    { value: '已延期', label: '已延期' },
+                  ]}
+                />
+              </div>
+            )}
+
             <div className="flex items-center gap-2 text-[11px] text-white/50">
               <span className="w-6 h-6 rounded-full liquid-icon-well flex items-center justify-center text-[9px] font-bold">
                 {taskDetail.assignee?.avatar || taskDetail.assignee?.name?.slice(0, 2).toUpperCase() || '—'}

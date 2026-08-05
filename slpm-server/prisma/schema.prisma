@@ -224,6 +224,8 @@ model ProductVersion {
   product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   name        String   // 如 v2.1.0
   description String   @default("")
+  // P4-2：发布说明（Release Notes，已发布版本展示）
+  releaseNotes String  @default("")
   status      String   @default("planning") // planning | in_progress | released | archived
   startDate   DateTime?
   releaseDate DateTime?

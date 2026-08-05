@@ -3,8 +3,9 @@ import { Request } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler, requireAuth } from '../middleware/auth.js';
-import { requireProductAccess } from '../middleware/product.js';
+import { requireProductAccess, requireProductRole } from '../middleware/product.js';
 import { ApiError } from '../middleware/error.js';
+import { notifyAssignment } from '../lib/notify.js';
 
 const router = Router();
 
@@ -26,6 +27,76 @@ async function scopeWorkspaceIds(req: Request) {
   });
   return all.map((w) => w.id);
 }
+
+// ---- PATCH /api/products/:id/tasks/:taskId ----
+// P4-2：产品级任务更新（跨项目指派负责人 / 调整版本 / 状态 / 阶段）。
+// 权限：产品级 po/admin，或任务所属工作区成员（限本人任务可见范围）。
+const updateProductTaskSchema = z.object({
+  assigneeId: z.string().optional().nullable(),
+  status: z.enum(['进行中', '已完成', '待处理', '已延期']).optional(),
+  phase: z.enum(['需求评审', '产品设计', '开发实现', '测试验证']).optional(),
+  priority: z.string().optional(),
+  productVersionId: z.string().optional().nullable(),
+});
+router.patch(
+  '/:id/tasks/:taskId',
+  requireAuth,
+  requireProductAccess,
+  asyncHandler(async (req, res) => {
+    const parsed = updateProductTaskSchema.safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
+    const d = parsed.data;
+
+    // 任务必须属于产品下的工作区
+    const task = await prisma.task.findFirst({
+      where: {
+        id: req.params.taskId,
+        workspace: { productId: req.product!.productId },
+      },
+      include: { workspace: { select: { id: true } } },
+    });
+    if (!task) throw new ApiError(404, '任务不存在或不属于该产品线');
+
+    // 权限：产品级 po/admin，或任务所属工作区成员
+    const isManager = req.product!.role === 'po' || req.product!.role === 'admin';
+    if (!isManager && !req.product!.workspaceIds.includes(task.workspace.id)) {
+      throw new ApiError(403, '无权修改该任务');
+    }
+
+    // 跨项目指派：目标负责人必须是产品下任一工作区的成员
+    if (d.assigneeId) {
+      const inProduct = await prisma.workspaceMember.findFirst({
+        where: { userId: d.assigneeId, workspace: { productId: req.product!.productId } },
+        select: { id: true },
+      });
+      if (!inProduct) throw new ApiError(400, '目标负责人不在该产品线的任何项目中');
+    }
+
+    const data: Record<string, unknown> = {};
+    if (d.assigneeId !== undefined) data.assigneeId = d.assigneeId;
+    if (d.status !== undefined) data.status = d.status;
+    if (d.phase !== undefined) data.phase = d.phase;
+    if (d.priority !== undefined) data.priority = d.priority;
+    if (d.productVersionId !== undefined) data.productVersionId = d.productVersionId;
+
+    const updated = await prisma.task.update({
+      where: { id: task.id },
+      data,
+      include: {
+        assignee: { select: { id: true, name: true, avatar: true, role: true } },
+        workspace: { select: { id: true, name: true } },
+        productVersion: { select: { id: true, name: true, status: true } },
+      },
+    });
+
+    // 指派变更 → 通知新负责人（异步）
+    if (d.assigneeId !== undefined && d.assigneeId !== task.assigneeId) {
+      notifyAssignment(updated.id, task.workspace.id, req.user!.sub, task.assigneeId, updated.assigneeId ?? null).catch(() => {});
+    }
+
+    res.json({ task: updated });
+  }),
+);
 
 // GET /api/products/:id/tasks —— 跨工作区任务列表（含所属项目/版本）
 const tasksQuerySchema = z.object({
