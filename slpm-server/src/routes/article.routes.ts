@@ -15,7 +15,7 @@ function publicArticle(
   a: {
     id: string;
     title: string;
-    body: string;
+    body?: string; // P5-1：列表不返回 body（节省传输），详情页才有
     category: string;
     starredByIds: string[];
     views: number;
@@ -31,7 +31,7 @@ function publicArticle(
   return {
     id: a.id,
     title: a.title,
-    body: a.body,
+    body: a.body ?? '', // 列表为空串，详情页有完整正文
     category: a.category,
     views: a.views,
     pinned: a.pinned,
@@ -47,7 +47,9 @@ function publicArticle(
 }
 
 // ---- GET /api/articles ----
-// 可选 query: category（精确分类）、starred=true（仅收藏）
+// 可选 query: category（精确分类）、starred=true（仅收藏）、page/pageSize（P5-1 分页）
+import { MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE } from '../lib/constants.js';
+
 router.get(
   '/',
   requireAuth,
@@ -55,6 +57,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
     const onlyStarred = req.query.starred === 'true';
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(req.query.pageSize) || DEFAULT_PAGE_SIZE));
 
     const where: Record<string, unknown> = { workspaceId: req.workspace!.id };
     if (category && CATEGORIES.includes(category as (typeof CATEGORIES)[number])) {
@@ -64,13 +68,24 @@ router.get(
       where.starredByIds = { has: req.user!.sub };
     }
 
-    const articles = await prisma.knowledgeArticle.findMany({
-      where,
-      orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
-      include: { author: { select: { id: true, name: true, avatar: true } } },
-    });
+    const [articles, total] = await Promise.all([
+      prisma.knowledgeArticle.findMany({
+        where,
+        orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+        // P5-1：列表不返回完整 body（避免传输浪费），详情页才取 body
+        select: {
+          id: true, title: true, category: true, views: true, pinned: true,
+          starredByIds: true, authorId: true, workspaceId: true,
+          createdAt: true, updatedAt: true,
+          author: { select: { id: true, name: true, avatar: true } },
+        },
+      }),
+      prisma.knowledgeArticle.count({ where }),
+    ]);
 
-    res.json({ articles: articles.map((a) => publicArticle(a, req.user!.sub)) });
+    res.json({ articles: articles.map((a) => publicArticle(a, req.user!.sub)), total, page, pageSize, hasMore: page * pageSize < total });
   }),
 );
 

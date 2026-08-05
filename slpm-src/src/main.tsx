@@ -6,23 +6,26 @@ import { LoginPage } from './pages/LoginPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { AuthProvider } from './context/AuthContext';
 import { QueryProvider } from './context/QueryProvider';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <QueryProvider>
-        <AuthProvider>
-          <Routes>
-            {/* 公开路由 */}
-            <Route path="/login" element={<LoginPage />} />
-            {/* P4-2：密码重置页（免登录） */}
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            {/* 其余全部走 App（内含 RequireAuth 守卫） */}
-            <Route path="/*" element={<App />} />
-          </Routes>
-        </AuthProvider>
-      </QueryProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <QueryProvider>
+          <AuthProvider>
+            <Routes>
+              {/* 公开路由 */}
+              <Route path="/login" element={<LoginPage />} />
+              {/* P4-2：密码重置页（免登录） */}
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              {/* 其余全部走 App（内含 RequireAuth 守卫） */}
+              <Route path="/*" element={<App />} />
+            </Routes>
+          </AuthProvider>
+        </QueryProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

@@ -19,6 +19,7 @@ import productDashboardRoutes from './routes/product-dashboard.routes.js';
 import { setupSocket } from './lib/ws.js';
 import { ensureSystemAdmin } from './lib/seed.js';
 import { errorHandler, notFound } from './middleware/error.js';
+import { apiLimiter } from './middleware/rateLimit.js';
 
 const app = express();
 
@@ -33,6 +34,8 @@ app.use(
   }),
 );
 app.use(express.json());
+// P5-1：通用 API 速率限制（认证类路由在各自 router 内加更严格限制）
+app.use('/api/', apiLimiter);
 
 // 健康检查（无需认证，供前端探活）
 app.get('/api/health', (_req, res) => {

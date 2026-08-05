@@ -5,12 +5,17 @@ import { TaskGroupList } from '@/components/dashboard/TaskGroupList';
 import { RecentFilesPanel } from '@/components/dashboard/RecentFilesPanel';
 import { ProjectTimeline } from '@/components/dashboard/ProjectTimeline';
 import { AISmartDetailPanel } from '@/components/dashboard/AISmartDetailPanel';
+import { QueryError } from '@/components/QueryError';
 import { useApp } from '@/context/AppContext';
 import { useTasks } from '@/lib/queries';
 
 export const TaskManagementPage: React.FC = () => {
   const { setSelectedTask } = useApp();
-  const { data: tasks = [], isLoading } = useTasks();
+  const { data: tasks = [], isLoading, isError, refetch } = useTasks();
+
+  if (isError) {
+    return <QueryError onRetry={() => refetch()} message="任务数据加载失败，请检查网络或工作区状态" />;
+  }
 
   return (
     <div className="h-full min-h-0 flex flex-col">

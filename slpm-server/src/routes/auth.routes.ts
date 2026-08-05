@@ -11,6 +11,7 @@ import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { ApiError } from '../middleware/error.js';
 import { env } from '../config/env.js';
 import { seedDemoForUser } from '../lib/seed.js';
+import { authLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 
@@ -101,6 +102,7 @@ const registerSchema = z.object({
 
 router.post(
   '/register',
+  authLimiter,
   asyncHandler(async (req, res) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -166,6 +168,7 @@ const loginSchema = z.object({
 
 router.post(
   '/login',
+  authLimiter,
   asyncHandler(async (req, res) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -241,6 +244,7 @@ router.patch(
 // （前端 <img src="/api/auth/avatar/xxx"> 直接展示）
 router.post(
   '/avatar',
+  authLimiter,
   requireAuth,
   avatarUpload.single('file'),
   asyncHandler(async (req, res) => {
@@ -282,6 +286,7 @@ const forgotSchema = z.object({
 });
 router.post(
   '/forgot-password',
+  authLimiter,
   asyncHandler(async (req, res) => {
     const parsed = forgotSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
@@ -308,6 +313,7 @@ const resetSchema = z.object({
 });
 router.post(
   '/reset-password',
+  authLimiter,
   asyncHandler(async (req, res) => {
     const parsed = resetSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());

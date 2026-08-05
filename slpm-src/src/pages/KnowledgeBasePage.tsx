@@ -3,6 +3,7 @@ import { BookOpen, Search, Folder, FileText, Star, ChevronRight, Plus, Share2, B
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
+import { QueryError } from '@/components/QueryError';
 import { useToast } from '@/components/ui/Toast';
 import { useArticles, useCreateArticle, useToggleArticleStar } from '@/lib/queries';
 import { apiError } from '@/lib/api';
@@ -16,7 +17,7 @@ function formatViews(n: number): string {
 
 export const KnowledgeBasePage: React.FC = () => {
   const { show, ToastEl } = useToast();
-  const { data: articles = [], isLoading } = useArticles();
+  const { data: articles = [], isLoading, isError, refetch } = useArticles();
   const createArticleMut = useCreateArticle();
   const toggleStarMut = useToggleArticleStar();
 
@@ -74,6 +75,10 @@ export const KnowledgeBasePage: React.FC = () => {
   const toggleStar = (article: KnowledgeArticle) => {
     toggleStarMut.mutate({ id: article.id, starred: !article.starred });
   };
+
+  if (isError) {
+    return <QueryError onRetry={() => refetch()} message="知识库文章加载失败，请检查网络或工作区状态" />;
+  }
 
   return (
     <div className="w-full h-full min-h-0 flex flex-col gap-4 pb-1">

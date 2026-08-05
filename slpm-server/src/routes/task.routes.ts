@@ -22,7 +22,7 @@ const FIELD_LABELS: Record<string, string> = {
   estimatedHours: '预估工时', // P4-2
 };
 
-// 任务查询条件校验（列表过滤）
+// 任务查询条件校验（列表过滤 + 分页）
 const listQuerySchema = z.object({
   status: z
     .enum(['进行中', '已完成', '待处理', '已延期'])
@@ -31,16 +31,12 @@ const listQuerySchema = z.object({
     .enum(['需求评审', '产品设计', '开发实现', '测试验证'])
     .optional(),
   assignedToMe: z.enum(['true', 'false']).optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(100),
 });
 
-// 标准化优先级：原 demo 里混杂 '高优先级'/'紧急' 等杂质值，统一收敛
-const PRIORITY_MAP: Record<string, string> = {
-  高: '高',
-  高优先级: '高',
-  紧急: '高',
-  中: '中',
-  低: '低',
-};
+// 标准化优先级（来自共享常量）
+import { PRIORITY_MAP as STD_PRIORITY_MAP } from '../lib/constants.js';
 
 // ---- GET /api/tasks ----
 router.get(
@@ -59,21 +55,27 @@ router.get(
 
     // P1-6：可选加载依赖关系
     const withDeps = req.query.withDeps === 'true';
-    const tasks = await prisma.task.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }],
-      include: {
-        assignee: { select: { id: true, name: true, avatar: true, role: true } },
-        ...(withDeps ? {
-          parent: { select: { id: true, title: true, status: true } },
-          children: { select: { id: true, title: true, status: true } },
-          blockedBy: { include: { dependsOnTask: { select: { id: true, title: true, status: true } } } },
-          blocks: { include: { task: { select: { id: true, title: true, status: true } } } },
-        } : {}),
-      },
-    });
+    const { page, pageSize } = parsed.data;
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }],
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+        include: {
+          assignee: { select: { id: true, name: true, avatar: true, role: true } },
+          ...(withDeps ? {
+            parent: { select: { id: true, title: true, status: true } },
+            children: { select: { id: true, title: true, status: true } },
+            blockedBy: { include: { dependsOnTask: { select: { id: true, title: true, status: true } } } },
+            blocks: { include: { task: { select: { id: true, title: true, status: true } } } },
+          } : {}),
+        },
+      }),
+      prisma.task.count({ where }),
+    ]);
 
-    res.json({ tasks });
+    res.json({ tasks, total, page, pageSize, hasMore: page * pageSize < total });
   }),
 );
 
@@ -112,7 +114,7 @@ router.post(
         title: d.title,
         description: d.description,
         phase: d.phase,
-        priority: PRIORITY_MAP[d.priority] ?? '中',
+        priority: STD_PRIORITY_MAP[d.priority] ?? '中',
         status: d.status,
         deadline: d.deadline ? new Date(d.deadline) : null,
         startDate: d.startDate ? new Date(d.startDate) : null,
@@ -167,7 +169,7 @@ router.patch(
     if (d.title !== undefined) data.title = d.title;
     if (d.description !== undefined) data.description = d.description;
     if (d.phase !== undefined) data.phase = d.phase;
-    if (d.priority !== undefined) data.priority = PRIORITY_MAP[d.priority] ?? '中';
+    if (d.priority !== undefined) data.priority = STD_PRIORITY_MAP[d.priority] ?? '中';
     if (d.status !== undefined) data.status = d.status;
     if (d.deadline !== undefined) data.deadline = d.deadline ? new Date(d.deadline) : null;
     if (d.startDate !== undefined) data.startDate = d.startDate ? new Date(d.startDate) : null;

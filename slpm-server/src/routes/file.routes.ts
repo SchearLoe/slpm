@@ -9,8 +9,27 @@ import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { requireWorkspace } from '../middleware/workspace.js';
 import { ApiError } from '../middleware/error.js';
 import { env } from '../config/env.js';
+import { FILE_UPLOAD, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE } from '../lib/constants.js';
 
 const router = Router();
+
+/**
+ * P5-1：上传安全校验。
+ * 1. 扩展名黑名单（.exe/.svg/.js 等）
+ * 2. mimetype 与扩展名白名单一致性（防 mime 欺骗）
+ */
+function validateUpload(filename: string, mimetype: string): void {
+  const ext = path.extname(filename || '').toLowerCase();
+  // 危险扩展名一律拒绝
+  if (FILE_UPLOAD.blockedExtensions.includes(ext as never)) {
+    throw new ApiError(400, `不允许上传此类型文件：${ext || '(无扩展名)'}`);
+  }
+  // mimetype 与扩展名白名单一致性
+  const allowedExts = FILE_UPLOAD.allowed[mimetype];
+  if (!allowedExts || !allowedExts.includes(ext)) {
+    throw new ApiError(400, `不支持的文件类型：${mimetype || '未知'} (${ext || '无扩展名'})。支持图片/PDF/Office/文本/压缩包。`);
+  }
+}
 
 // P1-3：multer 磁盘存储。destination 需要 req.workspace（所以中间件顺序：
 //   requireAuth → requireWorkspace → upload.single → handler）。
@@ -28,23 +47,36 @@ const upload = multer({
       cb(null, `${randomUUID()}${ext}`);
     },
   }),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+  limits: { fileSize: FILE_UPLOAD.maxBytes }, // 20MB
 });
 
-// ---- GET /api/files ---- 工作区文件列表
+// ---- GET /api/files ---- 工作区文件列表（P5-1：分页，?page=&pageSize=）
+const listFilesSchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(DEFAULT_PAGE_SIZE),
+});
 router.get(
   '/',
   requireAuth,
   requireWorkspace,
   asyncHandler(async (req, res) => {
-    const files = await prisma.fileRecord.findMany({
-      where: { workspaceId: req.workspace!.id },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        uploader: { select: { id: true, name: true, avatar: true } },
-      },
-    });
-    res.json({ files });
+    const parsed = listFilesSchema.safeParse(req.query);
+    if (!parsed.success) throw new ApiError(400, '查询参数错误', parsed.error.flatten());
+    const { page, pageSize } = parsed.data;
+
+    const [files, total] = await Promise.all([
+      prisma.fileRecord.findMany({
+        where: { workspaceId: req.workspace!.id },
+        orderBy: { createdAt: 'desc' },
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+        include: {
+          uploader: { select: { id: true, name: true, avatar: true } },
+        },
+      }),
+      prisma.fileRecord.count({ where: { workspaceId: req.workspace!.id } }),
+    ]);
+    res.json({ files, total, page, pageSize, hasMore: page * pageSize < total });
   }),
 );
 
@@ -58,6 +90,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const file = req.file;
     if (!file) throw new ApiError(400, '请选择要上传的文件');
+
+    // P5-1：上传安全校验（扩展名黑名单 + mimetype/扩展名白名单一致性）
+    validateUpload(file.originalname, file.mimetype);
 
     // 表单字段（multipart）
     const title = (req.body.title as string | undefined)?.trim() || file.originalname;

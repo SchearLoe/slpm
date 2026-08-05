@@ -4,6 +4,7 @@ import { Users, UserCheck, MessageSquare, UserMinus } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
+import { QueryError } from '@/components/QueryError';
 import { useToast } from '@/components/ui/Toast';
 import { useApp } from '@/context/AppContext';
 import { springSoft } from '@/lib/motion';
@@ -21,7 +22,7 @@ export const TeamCollaborationPage: React.FC = () => {
   const wsId = currentWorkspace?.id;
 
   // P1-3：成员列表来自真实 workspace 成员（替代写死的 initialMembers）
-  const { data: members = [], isLoading } = useWorkspaceMembers(wsId);
+  const { data: members = [], isLoading, isError: membersError, refetch: refetchMembers } = useWorkspaceMembers(wsId);
   // P4-2：在线成员（快照 + WebSocket presence 实时更新）
   const { data: onlineSnapshot } = useWorkspaceOnline(wsId);
   const [onlineSet, setOnlineSet] = useState<Set<string>>(new Set());
@@ -114,6 +115,10 @@ export const TeamCollaborationPage: React.FC = () => {
       show(apiError(err, '角色切换失败'));
     }
   };
+
+  if (membersError) {
+    return <QueryError onRetry={() => refetchMembers()} message="成员列表加载失败，请检查网络或工作区状态" />;
+  }
 
   return (
     <div className="w-full min-h-full space-y-5 pb-4">

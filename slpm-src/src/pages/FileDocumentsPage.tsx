@@ -3,6 +3,7 @@ import { FileText, Search, UploadCloud, Download, Eye, Share2, MoreHorizontal, P
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
+import { QueryError } from '@/components/QueryError';
 import { useToast } from '@/components/ui/Toast';
 import { FileRecord } from '@/types';
 import { useFiles, useUploadFile, useDeleteFile, useRenameFile, useFilePreviewUrl, downloadFile } from '@/lib/queries';
@@ -12,12 +13,16 @@ import { AnimatePresence, motion } from 'framer-motion';
 export const FileDocumentsPage: React.FC = () => {
   const { show, ToastEl } = useToast();
   // P1-3：从后端拉真实文件（按工作区隔离）
-  const { data: files = [], isLoading } = useFiles();
+  const { data: files = [], isLoading, isError, refetch } = useFiles();
   const uploadFile = useUploadFile();
   const deleteFile = useDeleteFile();
   const renameFile = useRenameFile(); // P1-5 重命名
   // P1-5：预览 blob URL（用 fileId 触发 lazy fetch）
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+
+  if (isError) {
+    return <QueryError onRetry={() => refetch()} message="文件列表加载失败，请检查网络或工作区状态" />;
+  }
   const previewBlobQ = useFilePreviewUrl(previewFileId);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameTitle, setRenameTitle] = useState('');
