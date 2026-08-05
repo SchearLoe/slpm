@@ -1,4 +1,4 @@
-# Design System: WB WenXiBuddy
+# Design System: SLPM
 
 > **唯一视觉与交互真源。** 所有页面、组件、弹窗、动效必须遵守本文。  
 > 产品：液态毛玻璃（Liquid Glass）暗黑生产力 OS · 8 大模块全交互。
@@ -61,7 +61,7 @@
 
 ## 1. Visual Theme & Atmosphere
 
-WenXiBuddy 是 **void-black + Liquid Glass** 的生产力界面。画布纯黑，面板半透明悬浮，emerald 霓虹作唯一强强调色。信息层级靠白字透明度，不靠大色块。
+SLPM 是 **void-black + Liquid Glass** 的生产力界面。画布纯黑，面板半透明悬浮，emerald 霓虹作唯一强强调色。信息层级靠白字透明度，不靠大色块。
 
 **气质**：premium · calm · AI-native · 高密度但不拥挤 · **弹性动效全程在场**。
 
@@ -238,7 +238,7 @@ box-shadow:
 ## 11. Agent Prompt（复制即用）
 
 ```text
-按 DESIGN.md 实现/修改 WB WenXiBuddy：
+按 DESIGN.md 实现/修改 SLPM：
 - 纯黑 void + Liquid Glass（blur/高光/透光），emerald 唯一强强调色
 - 框架布局、底对齐、单行工具条、空白保持 void
 - 任何页面/视图/弹窗/筛选切换必须有 Framer Motion 动效

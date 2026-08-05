@@ -49,12 +49,12 @@ SLPM 是一个全栈项目管理系统，前端基于高保真 Liquid Glass 交�
 
 ### 前提
 - Node.js ≥ 20 · PostgreSQL 16（运行中）
-- 创建数据库 `wenxibuddy`
+- 创建数据库 `slpm`
 
 ### 后端
 
 ```bash
-cd wenxibuddy-server
+cd slpm-server
 cp .env.example .env          # 编辑 .env 填入数据库密码 + AI_ENCRYPTION_KEY
 npm install
 npx prisma migrate deploy
@@ -64,7 +64,7 @@ npm run dev                   # → http://localhost:8080
 ### 前端
 
 ```bash
-cd wenxibuddy-src
+cd slpm-src
 cp .env.example .env          # VITE_API_BASE_URL=/api（开发走 vite proxy）
 npm install
 npm run dev                   # → http://localhost:3000
@@ -79,7 +79,7 @@ npm run dev                   # → http://localhost:3000
 
 ```
 D:\VibeCode\xmgl\
-├── wenxibuddy-src\         # 前端 SPA
+├── slpm-src\         # 前端 SPA
 │   ├── src/
 │   │   ├── components/     # 布局 · 看板 · 弹窗 · UI 组件
 │   │   ├── context/        # Auth · App 全局状态
@@ -88,7 +88,7 @@ D:\VibeCode\xmgl\
 │   │   └── types/          # TypeScript 类型定义
 │   ├── vite.config.ts
 │   └── package.json
-├── wenxibuddy-server\      # 后端 API
+├── slpm-server\      # 后端 API
 │   ├── src/
 │   │   ├── config/         # 环境变量
 │   │   ├── middleware/     # auth · workspace · admin · error
@@ -190,10 +190,10 @@ SystemConfig ── 全局单例（AI baseURL/加密Key/model/temperature）
 
 ## 环境变量
 
-### 后端（wenxibuddy-server/.env）
+### 后端（slpm-server/.env）
 
 ```
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/wenxibuddy?schema=public"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/slpm?schema=public"
 JWT_SECRET="change-me-to-a-long-random-string"
 JWT_EXPIRES_IN="7d"
 PORT=8080
@@ -202,7 +202,7 @@ CLIENT_ORIGIN="http://localhost:3000"
 AI_ENCRYPTION_KEY="change-me-to-another-random-string"
 ```
 
-### 前端（wenxibuddy-src/.env）
+### 前端（slpm-src/.env）
 
 ```
 VITE_API_BASE_URL=/api
@@ -232,7 +232,7 @@ npm run build             # 生产构建
 
 本项目的前端设计系统与交互原型衍生自以下两个优秀的开源项目，在此致以诚挚感谢：
 
-- [cuberfry68-coder/wenxibuddy](https://github.com/cuberfry68-coder/wenxibuddy) — 原始 WenXiBuddy 设计灵感与概念原型
+- [cuberfry68-coder/slpm](https://github.com/cuberfry68-coder/slpm) — 原始 SLPM 设计灵感与概念原型
 - [lllll081926i/wxbuddy](https://github.com/lllll081926i/wxbuddy) — Liquid Glass 高保真交互原型
 
 SLPM 在这些基础上实现了完整的后端数据持久化、多工作区租户隔离、RBAC 权限、真实 AI 集成、WebSocket 实时推送和项目管理核心功能。

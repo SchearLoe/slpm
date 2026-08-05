@@ -1,9 +1,9 @@
 {
-  "name": "wenxibuddy-server",
+  "name": "slpm-server",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "WenXiBuddy 后端 — Express + Prisma + PostgreSQL + JWT",
+  "description": "SLPM 后端 — Express + Prisma + PostgreSQL + JWT",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",

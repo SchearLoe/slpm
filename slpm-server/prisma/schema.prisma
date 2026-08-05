@@ -1,4 +1,4 @@
-// WenXiBuddy 数据库模型
+// SLPM 数据库模型
 // 数据库：PostgreSQL 16
 // 说明：为个人使用起步设计，预留 owner/workspace 关系以便后续扩展团队版
 

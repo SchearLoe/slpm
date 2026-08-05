@@ -647,8 +647,8 @@ export async function streamAiSuggest(
   onDelta: (fullText: string) => void,
   signal?: AbortSignal,
 ): Promise<{ confidence: number }> {
-  const token = localStorage.getItem('wenxibuddy_token');
-  const workspaceId = localStorage.getItem('wenxibuddy_workspace');
+  const token = localStorage.getItem('slpm_token');
+  const workspaceId = localStorage.getItem('slpm_workspace');
   const baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
 
   const resp = await fetch(`${baseURL}/ai/suggest/stream`, {

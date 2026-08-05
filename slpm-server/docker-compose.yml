@@ -5,29 +5,29 @@
 #   docker compose up -d        启动 PostgreSQL
 #   docker compose down          停止
 #
-# 启动后，把 wenxibuddy-server/.env 的 DATABASE_URL 改为：
-#   postgresql://wenxi:wenxi123@localhost:5432/wenxibuddy?schema=public
+# 启动后，把 slpm-server/.env 的 DATABASE_URL 改为：
+#   postgresql://slpm:slpm123@localhost:5432/slpm?schema=public
 
 version: '3.9'
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: wenxibuddy-db
+    container_name: slpm-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: wenxi
-      POSTGRES_PASSWORD: wenxi123
-      POSTGRES_DB: wenxibuddy
+      POSTGRES_USER: slpm
+      POSTGRES_PASSWORD: slpm123
+      POSTGRES_DB: slpm
     ports:
       - '5432:5432'
     volumes:
-      - wenxibuddy_pgdata:/var/lib/postgresql/data
+      - slpm_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U wenxi -d wenxibuddy']
+      test: ['CMD-SHELL', 'pg_isready -U slpm -d slpm']
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
-  wenxibuddy_pgdata:
+  slpm_pgdata:

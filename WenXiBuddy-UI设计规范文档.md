@@ -1,7 +1,7 @@
-# WenXiBuddy（问习伙伴）UI 设计规范与开发复刻文档
+# SLPM UI 设计规范与开发复刻文档
 
-> **本文档基于真实代码仓库 `lllll081926i/wenxibuddy` 逆向梳理**，与项目 `DESIGN.md`「设计系统真源」对齐。
-> 目标：UI 设计师与前端开发仅凭本文档即可高保真复刻 WenXiBuddy —— 一款 **纯黑 void + 液态毛玻璃（Liquid Glass）** 的暗黑生产力 OS。
+> **本文档基于真实代码仓库 `lllll081926i/slpm` 逆向梳理**，与项目 `DESIGN.md`「设计系统真源」对齐。
+> 目标：UI 设计师与前端开发仅凭本文档即可高保真复刻 SLPM —— 一款 **纯黑 void + 液态毛玻璃（Liquid Glass）** 的暗黑生产力 OS。
 
 ---
 
@@ -742,4 +742,4 @@ import { AppProvider } from '@/context/AppContext';
 
 ---
 
-*文档版本 v2.0 · 基于真实仓库 `github.com/lllll081926i/wenxibuddy`（master 分支）逆向 · 与项目 `DESIGN.md` 设计真源对齐*
+*文档版本 v2.0 · 基于真实仓库 `github.com/lllll081926i/slpm`（master 分支）逆向 · 与项目 `DESIGN.md` 设计真源对齐*

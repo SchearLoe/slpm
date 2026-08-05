@@ -32,7 +32,7 @@ app.use(express.json());
 
 // 健康检查（无需认证，供前端探活）
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'wenxibuddy-server', time: new Date().toISOString() });
+  res.json({ ok: true, service: 'slpm-server', time: new Date().toISOString() });
 });
 
 // ---- 路由 ----
@@ -59,6 +59,6 @@ const io = new SocketServer(server, {
 setupSocket(io);
 
 server.listen(env.port, () => {
-  console.log(`🟢 wenxibuddy-server 运行中: http://localhost:${env.port}`);
+  console.log(`🟢 slpm-server 运行中: http://localhost:${env.port}`);
   console.log(`   环境: ${env.nodeEnv} · 前端: ${env.clientOrigin} · WebSocket ✓`);
 });

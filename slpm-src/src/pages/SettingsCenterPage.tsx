@@ -120,7 +120,7 @@ export const SettingsCenterPage: React.FC = () => {
   const [aiRisk, setAiRisk] = useState(true);
   const [aiDocLink, setAiDocLink] = useState(true);
   const [aiVoice, setAiVoice] = useState(false);
-  const [aiModel, setAiModel] = useState('wenxi-reasoner-3');
+  const [aiModel, setAiModel] = useState('slpm-reasoner-3');
   const [aiTemp, setAiTemp] = useState(0.4);
 
   // notify
@@ -135,7 +135,7 @@ export const SettingsCenterPage: React.FC = () => {
   // account
   const [displayName, setDisplayName] = useState('Brandon');
   const [title, setTitle] = useState('产品经理');
-  const [email, setEmail] = useState('brandon@wenxi.buddy');
+  const [email, setEmail] = useState('demo@slpm.app');
   const [timezone, setTimezone] = useState('Asia/Shanghai');
   const [language, setLanguage] = useState('zh-CN');
 
@@ -179,7 +179,7 @@ export const SettingsCenterPage: React.FC = () => {
     setAiRisk(true);
     setAiDocLink(true);
     setAiVoice(false);
-    setAiModel('wenxi-reasoner-3');
+    setAiModel('slpm-reasoner-3');
     setAiTemp(0.4);
     show('已恢复全部默认设置');
   };
@@ -453,9 +453,9 @@ export const SettingsCenterPage: React.FC = () => {
                       value={aiModel}
                       onChange={setAiModel}
                       options={[
-                        { value: 'wenxi-reasoner-3', label: 'WenXi Reasoner 3.0' },
-                        { value: 'wenxi-fast', label: 'WenXi Fast' },
-                        { value: 'wenxi-code', label: 'WenXi Code Assist' },
+                        { value: 'slpm-reasoner-3', label: 'SLPM Reasoner 3.0' },
+                        { value: 'slpm-fast', label: 'SLPM Fast' },
+                        { value: 'slpm-code', label: 'SLPM Code Assist' },
                       ]}
                     />
                   </div>

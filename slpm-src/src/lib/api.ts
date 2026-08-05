@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 
-const TOKEN_KEY = 'wenxibuddy_token';
-const WS_KEY = 'wenxibuddy_workspace';
+const TOKEN_KEY = 'slpm_token';
+const WS_KEY = 'slpm_workspace';
 
 // 取/存 token（localStorage）
 export const tokenStore = {

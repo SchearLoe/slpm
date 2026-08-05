@@ -9,7 +9,7 @@ function required(key: string, fallback?: string): string {
 
 export const env = {
   databaseUrl: required('DATABASE_URL'),
-  jwtSecret: required('JWT_SECRET', 'wenxibuddy-dev-secret'),
+  jwtSecret: required('JWT_SECRET', 'slpm-dev-secret'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
   port: Number(process.env.PORT ?? 8080),
   nodeEnv: process.env.NODE_ENV ?? 'development',

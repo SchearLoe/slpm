@@ -1,4 +1,4 @@
-# WenXiBuddy
+# SLPM
 
 > **Liquid Glass** 暗黑生产力前端 · 智能任务与项目管理  
 > React 19 · TypeScript · Vite · Tailwind CSS v4 · Framer Motion
@@ -107,7 +107,7 @@ SPA 需 fallback 到 `index.html`：
 ```nginx
 server {
   listen 80;
-  root /var/www/wenxibuddy/dist;
+  root /var/www/slpm/dist;
   index index.html;
   location / {
     try_files $uri $uri/ /index.html;

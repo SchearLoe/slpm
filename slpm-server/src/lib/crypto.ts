@@ -9,7 +9,7 @@ import { env } from '../config/env.js';
 
 const ALGO = 'aes-256-gcm';
 // scrypt 派生 32 字节密钥（AES-256 需要）；盐固定，因为 env 密钥已高熵
-const KEY = scryptSync(env.aiEncryptionKey, 'wenxibuddy-ai-key-salt', 32);
+const KEY = scryptSync(env.aiEncryptionKey, 'slpm-ai-key-salt', 32);
 
 /** 加密明文 → "iv:authTag:cipher"（全 hex） */
 export function encrypt(plain: string): string {
