@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, CheckCircle2, AlertTriangle, Users, Zap, ShieldCheck, PieChart, ArrowRight, Info } from 'lucide-react';
+import { BarChart3, CheckCircle2, AlertTriangle, Users, Zap, ShieldCheck, PieChart, ArrowRight, Info, Clock, Target } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { useToast } from '@/components/ui/Toast';
@@ -8,6 +8,8 @@ import { springSoft } from '@/lib/motion';
 import { ViewTransition } from '@/components/ui/PageTransition';
 import { useTasks } from '@/lib/queries';
 import { computeOverview, computeMemberLoad, OverviewStats } from '@/lib/aggregations';
+import { useApp } from '@/context/AppContext';
+import { getRoleConfig } from '@/lib/roleConfig';
 
 // 阶段 → 展示用的进度条颜色（与原 modules 视觉风格保持一致）
 const PHASE_COLOR: Record<string, string> = {
@@ -29,8 +31,21 @@ function DemoBadge() {
 export const ProjectOverviewPage: React.FC = () => {
   const { show, ToastEl } = useToast();
   const { data: tasks = [] } = useTasks();
+  const { currentRole } = useApp();
+  const roleCfg = getRoleConfig(currentRole);
+  const isReadOnly = roleCfg.readOnlyPages.includes('overview');
+  const isPM = currentRole === 'pm' || currentRole === 'admin';
   const stats: OverviewStats = useMemo(() => computeOverview(tasks), [tasks]);
   const memberLoad = useMemo(() => computeMemberLoad(tasks), [tasks]);
+
+  // P2-2：本周截止日期范围
+  const now = new Date();
+  const weekEnd = new Date(now); weekEnd.setDate(now.getDate() + 7);
+  const upcomingDeadlines = useMemo(() => tasks.filter((t) => {
+    if (!t.deadline) return false;
+    const d = new Date(t.deadline);
+    return d <= weekEnd && t.status !== '已完成';
+  }).sort((a,b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()), [tasks]);
 
   const [selectedModule, setSelectedModule] = useState<{ name: string; progress: number; color: string } | null>(null);
   const [tab, setTab] = useState<'health' | 'risk' | 'team'>('health');
@@ -84,6 +99,19 @@ export const ProjectOverviewPage: React.FC = () => {
               <DemoBadge />
               数据，需接入测试与需求平台。当前真实完成度见右侧。
             </p>
+            {/* P2-2：角色标签 */}
+            {isReadOnly && (
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300/80 text-[11px]">
+                <Info className="w-3 h-3" />
+                只读视图 · 当前角色：{roleCfg.label}
+              </div>
+            )}
+            {isPM && !isReadOnly && (
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/25 text-violet-300/80 text-[11px]">
+                <Target className="w-3 h-3" />
+                项目管理视图
+              </div>
+            )}
             <div className="flex gap-2 pt-1">
               {(['health', 'risk', 'team'] as const).map((t) => (
                 <button
@@ -146,6 +174,86 @@ export const ProjectOverviewPage: React.FC = () => {
         ))}
       </div>
 
+      {/* P2-2：PM 专属看板 —— 截止日预警 + 成员负荷 */}
+      {isPM && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          {/* 截止日预警 */}
+          <GlassCard className="p-5 space-y-3">
+            <h3 className="text-[13px] font-bold text-white flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-300" />
+              截止日预警
+              {upcomingDeadlines.length > 0 && (
+                <span className="text-[10px] font-normal text-white/40">{upcomingDeadlines.length} 项</span>
+              )}
+            </h3>
+            {upcomingDeadlines.length === 0 ? (
+              <p className="text-[12px] text-white/35 py-2">当前无逾期或本周截止任务 ✓</p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {upcomingDeadlines.slice(0, 8).map((t) => {
+                  const d = new Date(t.deadline!);
+                  const isOverdue = d < now;
+                  return (
+                    <div key={t.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-black/20 border border-white/[0.05]">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${isOverdue ? 'bg-rose-400' : 'bg-amber-400'}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[12px] text-white/80 truncate">{t.title}</div>
+                        <div className={`text-[10px] ${isOverdue ? 'text-rose-300' : 'text-amber-300/70'}`}>
+                          {isOverdue ? '已逾期 · ' : ''}{d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
+                          {t.assignee && typeof t.assignee === 'object' && 'name' in t.assignee && (
+                            <span className="text-white/30 ml-1">· {t.assignee.name}</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-medium shrink-0 ${t.status === '已延期' ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                        {t.status === '已延期' ? '已延期' : '进行中'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </GlassCard>
+
+          {/* 成员负荷分布 */}
+          <GlassCard className="p-5 space-y-3">
+            <h3 className="text-[13px] font-bold text-white flex items-center gap-2">
+              <Users className="w-4 h-4 text-cyan-300" />
+              成员负荷分布
+            </h3>
+            {memberLoad.length === 0 ? (
+              <p className="text-[12px] text-white/35 py-2">暂无任务分配数据</p>
+            ) : (
+              <div className="space-y-2.5 max-h-64 overflow-y-auto">
+                {memberLoad.slice(0, 8).map((m) => {
+                  const maxLoad = Math.max(...memberLoad.map(x => x.total), 1);
+                  const pct = Math.round((m.total / maxLoad) * 100);
+                  const donePct = m.total > 0 ? Math.round((m.completed / m.total) * 100) : 0;
+                  return (
+                    <div key={m.id} className="flex items-center gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-200 flex items-center justify-center text-[9px] font-bold shrink-0">
+                        {m.name.slice(0, 1)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex justify-between text-[11px] mb-0.5">
+                          <span className="text-white/70 truncate">{m.name}</span>
+                          <span className="text-white/35 font-mono">{m.completed}/{m.total}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-black/30 overflow-hidden flex">
+                          <div className="h-full bg-emerald-400/70 rounded-full" style={{ width: `${donePct}%` }} />
+                          <div className="h-full bg-white/10" style={{ width: `${Math.max(0, pct - donePct)}%` }} />
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-white/30 font-mono w-8 text-right shrink-0">{m.load}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </GlassCard>
+        </div>
+      )}
+
       <ViewTransition viewKey={tab}>
       {tab === 'health' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -185,25 +293,24 @@ export const ProjectOverviewPage: React.FC = () => {
           <GlassCard className="p-5 space-y-4">
             <h3 className="text-[13px] font-bold text-white flex items-center gap-2">
               <PieChart className="w-4 h-4 text-cyan-300" />
-              团队资源投入占比 <DemoBadge />
+              成员任务分布
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              {[
-                { role: '前端研发', count: '6 人', ratio: '35%', ring: 'border-emerald-400/50 text-emerald-200' },
-                { role: '后端与云架构', count: '5 人', ratio: '29%', ring: 'border-cyan-400/50 text-cyan-200' },
-                { role: 'AI 算法专家', count: '3 人', ratio: '18%', ring: 'border-violet-400/50 text-violet-200' },
-                { role: 'UI/UX 体验设计', count: '3 人', ratio: '18%', ring: 'border-amber-400/50 text-amber-200' },
-              ].map((r) => (
-                <button
-                  key={r.role}
-                  onClick={() => show(`${r.role}：${r.count} · 占比 ${r.ratio}`)}
-                  className={`p-3 rounded-2xl bg-black/25 border text-left hover:bg-white/[0.04] transition-colors ${r.ring}`}
-                >
-                  <div className="text-[11px] text-white/40">{r.role}</div>
-                  <div className="text-[18px] font-bold text-white mt-1">{r.count}</div>
-                  <div className="text-[10px] font-mono opacity-80 mt-0.5">占比 {r.ratio}</div>
-                </button>
-              ))}
+              {memberLoad.length === 0 ? (
+                <p className="text-[12px] text-white/35 col-span-2">暂无成员数据</p>
+              ) : (
+                memberLoad.slice(0, 4).map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => show(`${m.name}：${m.inProgress} 进行中 · ${m.completed} 已完成 · 负荷 ${m.load}%`)}
+                    className="p-3 rounded-2xl bg-black/25 border border-white/[0.06] text-left hover:bg-white/[0.04] transition-colors"
+                  >
+                    <div className="text-[11px] text-white/40 truncate">{m.name}</div>
+                    <div className="text-[18px] font-bold text-white mt-1">{m.inProgress + m.completed} 项</div>
+                    <div className="text-[10px] font-mono text-cyan-300/70 mt-0.5">负荷 {m.load}%</div>
+                  </button>
+                ))
+              )}
             </div>
           </GlassCard>
         </div>

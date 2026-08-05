@@ -27,6 +27,8 @@ import { ViewTransition } from '@/components/ui/PageTransition';
 import { useTasks, useAiSuggest } from '@/lib/queries';
 import { apiError } from '@/lib/api';
 import { computeFunnel, computeMemberLoad, computeBottleneck } from '@/lib/aggregations';
+import { useApp } from '@/context/AppContext';
+import { getRoleConfig } from '@/lib/roleConfig';
 
 type Range = '7d' | '30d' | 'q2';
 
@@ -42,6 +44,9 @@ function DemoBadge() {
 export const AIAnalyticsPage: React.FC = () => {
   const { show, ToastEl } = useToast();
   const { data: tasks = [] } = useTasks();
+  const { currentRole } = useApp();
+  const roleCfg = getRoleConfig(currentRole);
+  const isReadOnly = roleCfg.readOnlyPages.includes('analytics');
   const [range, setRange] = useState<Range>('7d');
   const [detail, setDetail] = useState<{ title: string; body: string; actions?: string[] } | null>(null);
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
@@ -173,14 +178,23 @@ export const AIAnalyticsPage: React.FC = () => {
           </button>
           <button
             onClick={recompute}
-            disabled={recomputing}
-            className="h-9 px-3.5 rounded-full liquid-btn-primary text-[12px] font-bold flex items-center gap-1.5 whitespace-nowrap disabled:opacity-60"
+            disabled={recomputing || isReadOnly}
+            title={isReadOnly ? '需管理员或 PM 权限' : ''}
+            className="h-9 px-3.5 rounded-full liquid-btn-primary text-[12px] font-bold flex items-center gap-1.5 whitespace-nowrap disabled:opacity-40"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${recomputing ? 'animate-spin' : ''}`} />
             {recomputing ? '重算中' : '立即重算'}
           </button>
         </div>
       </div>
+
+      {/* P2-2：角色标签 */}
+      {isReadOnly && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300/80 text-[11px] mt-3">
+          <span>🔒</span>
+          只读视图 · 当前角色：{roleCfg.label} — 无法重算或修改
+        </div>
+      )}
 
       {/* Hero banner */}
       <motion.div
