@@ -2,15 +2,14 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { KPICardsRow } from '@/components/dashboard/KPICardsRow';
 import { TaskGroupList } from '@/components/dashboard/TaskGroupList';
-import { CoverFlowDeck } from '@/components/dashboard/CoverFlowDeck';
+import { RecentFilesPanel } from '@/components/dashboard/RecentFilesPanel';
 import { ProjectTimeline } from '@/components/dashboard/ProjectTimeline';
 import { AISmartDetailPanel } from '@/components/dashboard/AISmartDetailPanel';
-import { DocPreviewModal } from '@/components/modals/DocPreviewModal';
 import { useApp } from '@/context/AppContext';
 import { useTasks } from '@/lib/queries';
 
 export const TaskManagementPage: React.FC = () => {
-  const { setSelectedTask, selectedDoc, setSelectedDoc } = useApp();
+  const { setSelectedTask } = useApp();
   const { data: tasks = [], isLoading } = useTasks();
 
   return (
@@ -50,7 +49,7 @@ export const TaskManagementPage: React.FC = () => {
             </div>
 
             <div className="deck-void min-w-0 min-h-0">
-              <CoverFlowDeck onSelectDoc={setSelectedDoc} />
+              <RecentFilesPanel />
             </div>
           </motion.div>
 
@@ -79,8 +78,6 @@ export const TaskManagementPage: React.FC = () => {
           <AISmartDetailPanel />
         </motion.div>
       </div>
-
-      <DocPreviewModal doc={selectedDoc} onClose={() => setSelectedDoc(null)} />
     </div>
   );
 };

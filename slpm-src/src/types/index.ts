@@ -68,6 +68,7 @@ export interface TaskItem {
   status: TaskStatus;
   time?: string; // 前端展示用（今天 10:00），后端不存
   phase: '需求评审' | '产品设计' | '开发实现' | '测试验证';
+  createdAt?: string; // ISO（P4-1：吞吐趋势按创建日期聚合）
   // assignee 同时兼容：后端返回关系对象 {id,name,avatar,role}；旧 demo 嵌入式
   assignee: TaskAssignee | { name: string; avatar: string; role: string };
   assigneeId?: string | null; // 后端外键
@@ -101,18 +102,6 @@ export interface MetricCardData {
   percentage: number;
   iconName: 'clipboard' | 'pulse' | 'check' | 'alert';
   variant: 'default' | 'overdue';
-}
-
-export interface CardDeckItem {
-  id: string;
-  title: string;
-  quarter: string;
-  completionRate: number; // e.g. 87
-  type: string;
-  colorTheme: 'emerald' | 'glass';
-  details: string;
-  author: string;
-  updatedAt: string;
 }
 
 export interface TimelineRow {

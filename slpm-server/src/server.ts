@@ -17,6 +17,7 @@ import productRoutes from './routes/product.routes.js';
 import productVersionRoutes from './routes/product-version.routes.js';
 import productDashboardRoutes from './routes/product-dashboard.routes.js';
 import { setupSocket } from './lib/ws.js';
+import { ensureSystemAdmin } from './lib/seed.js';
 import { errorHandler, notFound } from './middleware/error.js';
 
 const app = express();
@@ -65,7 +66,17 @@ const io = new SocketServer(server, {
 });
 setupSocket(io);
 
-server.listen(env.port, () => {
-  console.log(`🟢 slpm-server 运行中: http://localhost:${env.port}`);
-  console.log(`   环境: ${env.nodeEnv} · 前端: ${env.clientOrigin} · WebSocket ✓`);
-});
+// P4-1：启动引导（超级管理员初始化）→ 监听端口
+async function bootstrap() {
+  try {
+    await ensureSystemAdmin();
+  } catch (e) {
+    console.error('⚠️ 超级管理员初始化失败（忽略，继续启动）:', e instanceof Error ? e.message : e);
+  }
+  server.listen(env.port, () => {
+    console.log(`🟢 slpm-server 运行中: http://localhost:${env.port}`);
+    console.log(`   环境: ${env.nodeEnv} · 前端: ${env.clientOrigin} · WebSocket ✓`);
+  });
+}
+
+bootstrap();

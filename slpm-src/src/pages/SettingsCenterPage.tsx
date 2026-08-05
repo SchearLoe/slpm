@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
   Settings,
@@ -17,13 +18,14 @@ import {
   Download,
   Trash2,
   Cpu,
+  Camera,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/Toast';
-import { useAiConfig, useSaveAiConfig, useTestAi, useAiUsage } from '@/lib/queries';
-import { apiError } from '@/lib/api';
+import { useAiConfig, useSaveAiConfig, useTestAi, useAiUsage, useTasks } from '@/lib/queries';
+import { api, apiError } from '@/lib/api';
 import { springSoft } from '@/lib/motion';
 import { ViewTransition } from '@/components/ui/PageTransition';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
@@ -86,8 +88,10 @@ export const SettingsCenterPage: React.FC = () => {
     updateSettings,
   } = useApp();
   const { show, ToastEl } = useToast();
-  const { user } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const isSystemAdmin = user?.role === 'system_admin';
+  const qc = useQueryClient(); // P4-1：真实缓存清理 / 强制同步
+  const { data: allTasks = [] } = useTasks(); // P4-1：系统页真实 CSV 导出
   // P1-4：AI 配置（仅 system_admin 可读写）
   const aiConfigQ = useAiConfig();
   const aiUsageQ = useAiUsage(); // P1-5 真实用量
@@ -120,8 +124,6 @@ export const SettingsCenterPage: React.FC = () => {
   const [aiRisk, setAiRisk] = useState(true);
   const [aiDocLink, setAiDocLink] = useState(true);
   const [aiVoice, setAiVoice] = useState(false);
-  const [aiModel, setAiModel] = useState('slpm-reasoner-3');
-  const [aiTemp, setAiTemp] = useState(0.4);
 
   // notify
   const [mailNotify, setMailNotify] = useState(true);
@@ -132,12 +134,78 @@ export const SettingsCenterPage: React.FC = () => {
   const [quietHours, setQuietHours] = useState(true);
   const [sound, setSound] = useState(true);
 
-  // account
-  const [displayName, setDisplayName] = useState('Brandon');
-  const [title, setTitle] = useState('产品经理');
-  const [email, setEmail] = useState('demo@slpm.app');
+  // account（P4-1：从真实用户初始化）
+  const [displayName, setDisplayName] = useState(user?.name ?? '');
+  const [title, setTitle] = useState(user?.role ?? '成员');
+  const [email, setEmail] = useState(user?.email ?? '');
   const [timezone, setTimezone] = useState('Asia/Shanghai');
   const [language, setLanguage] = useState('zh-CN');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  // 用户变化时同步账号资料表单
+  React.useEffect(() => {
+    if (user) {
+      setDisplayName(user.name);
+      setTitle(user.role);
+      setEmail(user.email);
+    }
+  }, [user]);
+
+  // P4-1：真实保存账号资料
+  const saveAccount = async () => {
+    if (savingProfile) return;
+    setSavingProfile(true);
+    try {
+      await api.patch('/auth/me', { name: displayName.trim(), role: title.trim() });
+      await refreshUser();
+      show('资料已更新');
+    } catch (err) {
+      show(apiError(err, '保存失败'));
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // P4-1：真实头像上传
+  const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      setAvatarPreview(URL.createObjectURL(file));
+      const formData = new FormData();
+      formData.append('file', file);
+      await api.post('/auth/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 });
+      setAvatarPreview(null);
+      await refreshUser();
+      show('头像已更新');
+    } catch (err) {
+      setAvatarPreview(null);
+      show(apiError(err, '头像上传失败'));
+    }
+  };
+
+  // P4-1：真实 CSV 导出（任务清单）
+  const exportCSV = () => {
+    const header = ['ID', '标题', '阶段', '状态', '优先级', '负责人', '截止时间', '标签'];
+    const rows = allTasks.map((t) => [
+      t.id, t.title, t.phase, t.status, t.priority,
+      t.assignee?.name ?? '未指派',
+      t.deadline ? new Date(t.deadline).toLocaleString('zh-CN') : '',
+      t.tags.join('/'),
+    ]);
+    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `任务清单_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // privacy
   const [twoFA, setTwoFA] = useState(false);
@@ -145,10 +213,16 @@ export const SettingsCenterPage: React.FC = () => {
   const [analyticsShare, setAnalyticsShare] = useState(true);
   const [publicProfile, setPublicProfile] = useState(false);
 
-  // system
+  // system（P4-1：真实本地缓存大小 = localStorage 占用字节）
   const [autoSave, setAutoSave] = useState(true);
-  const [cacheSize] = useState('128 MB');
-  const [lastSync] = useState('刚刚');
+  const realCacheSize = useMemo(() => {
+    try {
+      const bytes = new Blob([JSON.stringify(localStorage)]).size;
+      return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    } catch {
+      return '0 KB';
+    }
+  }, []);
 
   // 保存全部：主题三件套落库（accentColor/glassBlur/enableConfetti），
   // 本地偏好（fontScale/reduceMotion，后端无字段）仍写 DOM。
@@ -179,8 +253,6 @@ export const SettingsCenterPage: React.FC = () => {
     setAiRisk(true);
     setAiDocLink(true);
     setAiVoice(false);
-    setAiModel('slpm-reasoner-3');
-    setAiTemp(0.4);
     show('已恢复全部默认设置');
   };
 
@@ -445,43 +517,14 @@ export const SettingsCenterPage: React.FC = () => {
               )}
 
               <GlassCard className="p-5 space-y-4">
-                <SectionTitle icon={Cpu} title="AI 模型与推理" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] text-white/45 mb-1.5 block">默认推理模型</label>
-                    <LiquidSelect
-                      value={aiModel}
-                      onChange={setAiModel}
-                      options={[
-                        { value: 'slpm-reasoner-3', label: 'SLPM Reasoner 3.0' },
-                        { value: 'slpm-fast', label: 'SLPM Fast' },
-                        { value: 'slpm-code', label: 'SLPM Code Assist' },
-                      ]}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-white/45 mb-1.5 block flex justify-between">
-                      <span>创造性温度</span>
-                      <span className="font-mono text-emerald-300">{aiTemp.toFixed(1)}</span>
-                    </label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.1}
-                      value={aiTemp}
-                      onChange={(e) => setAiTemp(Number(e.target.value))}
-                      className="w-full accent-emerald-500 mt-2"
-                    />
-                  </div>
+                <SectionTitle icon={Cpu} title="AI 辅助偏好" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <Toggle checked={aiAutoSuggest} onChange={setAiAutoSuggest} label="智能辅助预判" desc="任务详情实时推送风险与资源建议" />
+                  <Toggle checked={aiRisk} onChange={setAiRisk} label="风险自动扫描" desc="范围蔓延、时延等风险矩阵自动更新" />
+                  <Toggle checked={aiDocLink} onChange={setAiDocLink} label="历史文档关联" desc="创建任务时自动匹配相似 PRD / 规范" />
+                  <Toggle checked={aiVoice} onChange={setAiVoice} label="语音播报建议" desc="关键 AI 建议支持语音朗读" />
                 </div>
               </GlassCard>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                <Toggle checked={aiAutoSuggest} onChange={setAiAutoSuggest} label="智能辅助预判" desc="任务详情实时推送风险与资源建议" />
-                <Toggle checked={aiRisk} onChange={setAiRisk} label="风险自动扫描" desc="范围蔓延、时延等风险矩阵自动更新" />
-                <Toggle checked={aiDocLink} onChange={setAiDocLink} label="历史文档关联" desc="创建任务时自动匹配相似 PRD / 规范" />
-                <Toggle checked={aiVoice} onChange={setAiVoice} label="语音播报建议" desc="关键 AI 建议支持语音朗读（演示）" />
-              </div>
               {isSystemAdmin && (
                 <GlassCard className="p-5 space-y-3">
                   <SectionTitle icon={Sparkles} title="AI 使用配额" />
@@ -537,14 +580,18 @@ export const SettingsCenterPage: React.FC = () => {
               <GlassCard className="p-5 space-y-3">
                 <SectionTitle icon={Mail} title="通知渠道" />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {['站内信', '企业微信', 'Slack'].map((ch) => (
-                    <button
-                      key={ch}
-                      onClick={() => show(`已切换通知渠道偏好：${ch}`)}
-                      className="p-3 rounded-xl liquid-btn-ghost text-[12px] text-white/70 hover:text-white"
-                    >
-                      {ch}
-                    </button>
+                  {[
+                    { ch: '站内信', ok: true, desc: '当前已启用（顶栏铃铛 + WebSocket 实时推送）' },
+                    { ch: '企业微信', ok: false, desc: '尚未接入' },
+                    { ch: 'Slack', ok: false, desc: '尚未接入' },
+                  ].map((x) => (
+                    <div key={x.ch} className={`p-3 rounded-xl border text-[12px] ${x.ok ? 'bg-emerald-500/10 border-emerald-400/25 text-emerald-200' : 'bg-white/[0.02] border-white/[0.06] text-white/40'}`}>
+                      <div className="font-semibold flex items-center gap-1.5">
+                        {x.ch}
+                        {x.ok && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />}
+                      </div>
+                      <div className="text-[10px] mt-1 opacity-80">{x.desc}</div>
+                    </div>
                   ))}
                 </div>
               </GlassCard>
@@ -555,14 +602,21 @@ export const SettingsCenterPage: React.FC = () => {
             <GlassCard className="p-5 space-y-4">
               <SectionTitle icon={User} title="账号资料" />
               <div className="flex items-center gap-4 pb-2">
-                <div className="w-16 h-16 rounded-2xl liquid-icon-well flex items-center justify-center text-[18px] font-bold text-white">
-                  BR
+                <div className="w-16 h-16 rounded-2xl liquid-icon-well flex items-center justify-center text-[18px] font-bold text-white overflow-hidden shrink-0">
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="头像" className="w-full h-full object-cover" />
+                  ) : user?.avatar && user.avatar.startsWith('avatars/') ? (
+                    <img src={`/api/auth/avatar/${user.avatar.split('/').pop()}`} alt="头像" className="w-full h-full object-cover" />
+                  ) : (
+                    (user?.name ?? 'U').slice(0, 2).toUpperCase()
+                  )}
                 </div>
                 <div className="space-y-1">
-                  <button onClick={() => show('头像上传（演示）')} className="h-9 px-3 rounded-full liquid-btn-ghost text-[11px] text-white/70">
-                    更换头像
-                  </button>
-                  <p className="text-[10px] text-white/30">支持 PNG / JPG，最大 2MB</p>
+                  <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full liquid-btn-ghost text-[11px] text-white/70 cursor-pointer">
+                    <Camera className="w-3.5 h-3.5" /> 更换头像
+                    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={uploadAvatar} />
+                  </label>
+                  <p className="text-[10px] text-white/30">支持 PNG / JPEG / WebP / GIF，最大 2MB</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -576,7 +630,8 @@ export const SettingsCenterPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-[11px] text-white/45 mb-1.5 block">邮箱</label>
-                  <input className={field} value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <input className={field} value={email} disabled />
+                  <p className="text-[10px] text-white/30 mt-1">邮箱为登录账号，不可修改</p>
                 </div>
                 <div>
                   <label className="text-[11px] text-white/45 mb-1.5 block">时区</label>
@@ -604,12 +659,11 @@ export const SettingsCenterPage: React.FC = () => {
                 </div>
               </div>
               <button
-                onClick={() => {
-                  show(`资料已更新：${displayName} · ${title}`);
-                }}
-                className="h-10 px-5 rounded-full liquid-btn-primary text-[12px] font-bold"
+                onClick={saveAccount}
+                disabled={savingProfile}
+                className="h-10 px-5 rounded-full liquid-btn-primary text-[12px] font-bold disabled:opacity-50"
               >
-                更新资料
+                {savingProfile ? '保存中…' : '更新资料'}
               </button>
             </GlassCard>
           )}
@@ -623,21 +677,10 @@ export const SettingsCenterPage: React.FC = () => {
                 <Toggle checked={publicProfile} onChange={setPublicProfile} label="公开个人主页" desc="工作区内其他成员可查看完整资料" />
               </div>
               <GlassCard className="p-5 space-y-3">
-                <SectionTitle icon={Lock} title="会话与设备" />
-                {[
-                  { device: 'Windows · Chrome', where: '上海', when: '当前会话' },
-                  { device: 'macOS · Safari', where: '远程', when: '3 天前' },
-                ].map((s) => (
-                  <div key={s.device} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-black/25 border border-white/[0.05] text-[12px]">
-                    <div>
-                      <div className="text-white font-medium">{s.device}</div>
-                      <div className="text-[11px] text-white/35">{s.where} · {s.when}</div>
-                    </div>
-                    <button onClick={() => show(`已下线：${s.device}`)} className="text-[11px] text-rose-300 hover:underline">
-                      下线
-                    </button>
-                  </div>
-                ))}
+                <SectionTitle icon={Lock} title="会话与安全" />
+                <p className="text-[11px] text-white/40 leading-relaxed">
+                  当前登录状态由 JWT 管理（有效期 7 天）。如需在其他设备退出，请点击左下角头像 → 退出登录。
+                </p>
               </GlassCard>
             </>
           )}
@@ -650,30 +693,26 @@ export const SettingsCenterPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                 <GlassCard className="p-4 space-y-1">
                   <div className="text-[11px] text-white/40 flex items-center gap-1.5"><Database className="w-3.5 h-3.5" /> 本地缓存</div>
-                  <div className="text-[18px] font-bold text-white font-mono">{cacheSize}</div>
-                  <button onClick={() => show('缓存已清理')} className="text-[11px] text-emerald-300 hover:underline pt-1">清理缓存</button>
+                  <div className="text-[18px] font-bold text-white font-mono">{realCacheSize}</div>
+                  <button onClick={() => { qc.clear(); show('本地数据缓存已清除，页面将重新加载数据'); }} className="text-[11px] text-emerald-300 hover:underline pt-1">清理缓存</button>
                 </GlassCard>
                 <GlassCard className="p-4 space-y-1">
-                  <div className="text-[11px] text-white/40 flex items-center gap-1.5"><RefreshCw className="w-3.5 h-3.5" /> 最近同步</div>
-                  <div className="text-[18px] font-bold text-white">{lastSync}</div>
-                  <button onClick={() => show('已强制同步云端')} className="text-[11px] text-emerald-300 hover:underline pt-1">立即同步</button>
+                  <div className="text-[11px] text-white/40 flex items-center gap-1.5"><RefreshCw className="w-3.5 h-3.5" /> 数据同步</div>
+                  <div className="text-[18px] font-bold text-white">实时</div>
+                  <button onClick={() => { qc.invalidateQueries(); show('已触发全量重新拉取'); }} className="text-[11px] text-emerald-300 hover:underline pt-1">立即同步</button>
                 </GlassCard>
                 <GlassCard className="p-4 space-y-1">
                   <div className="text-[11px] text-white/40 flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> 数据导出</div>
-                  <div className="text-[18px] font-bold text-white">JSON / CSV</div>
-                  <button onClick={() => show('导出任务已排队')} className="text-[11px] text-emerald-300 hover:underline pt-1">导出全部</button>
+                  <div className="text-[18px] font-bold text-white">{allTasks.length} 条任务</div>
+                  <button onClick={() => { exportCSV(); show(`已导出 ${allTasks.length} 条任务为 CSV`); }} disabled={allTasks.length === 0} className="text-[11px] text-emerald-300 hover:underline pt-1 disabled:opacity-40">导出任务 CSV</button>
                 </GlassCard>
               </div>
               <GlassCard className="p-5 space-y-3">
                 <SectionTitle icon={Keyboard} title="快捷键" />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px]">
                   {[
-                    ['⌘ K', '全局搜索'],
-                    ['N', '新建任务'],
-                    ['E', '编辑当前任务'],
-                    ['⌘ Enter', '完成任务'],
-                    ['[ ]', '切换 CoverFlow'],
-                    ['?', '快捷键帮助'],
+                    ['⌘ K / Ctrl+K', '全局搜索（跨任务/文件/知识库/成员）'],
+                    ['N', '新建任务（任务页内）'],
                   ].map(([k, v]) => (
                     <div key={k} className="flex items-center justify-between p-2.5 rounded-xl bg-black/25 border border-white/[0.05]">
                       <span className="text-white/55">{v}</span>
@@ -684,14 +723,17 @@ export const SettingsCenterPage: React.FC = () => {
               </GlassCard>
               <GlassCard className="p-5 space-y-3 border border-rose-400/20">
                 <SectionTitle icon={Trash2} title="危险操作" />
-                <p className="text-[11px] text-white/40">删除工作区数据不可恢复，请谨慎操作。</p>
+                <p className="text-[11px] text-white/40">清除本地登录态与缓存并退出登录。云端数据不受影响。</p>
                 <button
                   onClick={() => {
-                    if (confirm('确认清空本地演示数据？')) show('本地演示数据已重置');
+                    if (confirm('确认清除本地缓存并退出登录？')) {
+                      localStorage.clear();
+                      logout();
+                    }
                   }}
                   className="h-10 px-4 rounded-full bg-rose-500/15 border border-rose-400/30 text-rose-300 text-[12px] font-semibold"
                 >
-                  清空本地演示数据
+                  清除本地数据并退出
                 </button>
               </GlassCard>
             </>

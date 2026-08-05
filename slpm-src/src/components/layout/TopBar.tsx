@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Mail, Plus, ChevronDown, Command, FilePlus2, CalendarPlus, Upload } from 'lucide-react';
+import { Search, Bell, Plus, ChevronDown, Command, FilePlus2, CalendarPlus, Upload, FileText, BookOpen, Users, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import { NotificationsModal } from '@/components/modals/NotificationsModal';
-import { LiquidModal } from '@/components/ui/LiquidModal';
 import { TitleTransition } from '@/components/ui/PageTransition';
-import { useTasks, useUnreadNotificationCount } from '@/lib/queries';
+import { useTasks, useUnreadNotificationCount, useFiles, useArticles, useWorkspaceMembers } from '@/lib/queries';
 
 interface TopBarProps {
   title?: string;
@@ -19,24 +18,54 @@ export const TopBar: React.FC<TopBarProps> = ({
   subtitle = '高效规划 · 智能协同 · 结果驱动',
   titleKey = title,
 }) => {
-  const { setIsNewTaskOpen, setSelectedTask } = useApp();
+  const { setIsNewTaskOpen, setSelectedTask, currentWorkspace } = useApp();
   const navigate = useNavigate();
   const { data: tasks = [] } = useTasks();
-  // P1-4：真实未读通知数（30s 轮询），替代原写死的 useState(3)
+  const { data: files = [] } = useFiles();
+  const { data: articles = [] } = useArticles();
+  const { data: members = [] } = useWorkspaceMembers(currentWorkspace?.id);
+  // P1-4：真实未读通知数（WebSocket 实时推送）
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showMail, setShowMail] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
-  const [quickMsg, setQuickMsg] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const searchResults = searchQuery
-    ? tasks.filter(
-        (t) =>
-          t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          t.id.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : [];
+  // P4-1：跨模块搜索（任务 / 文件 / 知识库文章 / 成员）
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return null;
+    return {
+      tasks: tasks
+        .filter((t) => t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || (t.assignee?.name ?? '').toLowerCase().includes(q))
+        .slice(0, 4),
+      files: files
+        .filter((f) => f.title.toLowerCase().includes(q) || f.originalName.toLowerCase().includes(q) || f.tags.some((tag) => tag.toLowerCase().includes(q)))
+        .slice(0, 3),
+      articles: articles
+        .filter((a) => a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q))
+        .slice(0, 3),
+      members: members
+        .filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+        .slice(0, 3),
+    };
+  }, [searchQuery, tasks, files, articles, members]);
+
+  const totalHits = searchResults ? searchResults.tasks.length + searchResults.files.length + searchResults.articles.length + searchResults.members.length : 0;
+
+  // P4-1：⌘K / Ctrl+K 聚焦搜索框
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const closeSearch = () => setSearchQuery('');
 
   return (
     <>
@@ -52,6 +81,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           <div className="liquid-pill flex items-center h-10 px-3.5 gap-2">
             <Search className="w-3.5 h-3.5 text-white/35 shrink-0" />
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="搜索任务、项目或文件..."
               value={searchQuery}
@@ -69,26 +99,106 @@ export const TopBar: React.FC<TopBarProps> = ({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 6 }}
-                className="absolute top-full left-0 right-0 mt-2 p-2 liquid-glass z-50 max-h-64 overflow-y-auto space-y-1"
+                className="absolute top-full left-0 right-0 mt-2 p-2 liquid-glass z-50 max-h-[70vh] overflow-y-auto space-y-2"
               >
-                {searchResults.length > 0 ? (
-                  searchResults.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => {
-                        setSelectedTask(t);
-                        setSearchQuery('');
-                      }}
-                      className="w-full text-left p-2.5 rounded-xl hover:bg-white/5 transition-colors"
-                    >
-                      <div className="text-[12px] font-semibold text-white">{t.title}</div>
-                      <div className="text-[10px] font-mono text-emerald-300/80 mt-0.5">
-                        {t.id} · {t.phase}
-                      </div>
-                    </button>
-                  ))
-                ) : (
-                  <div className="p-3 text-center text-white/35 text-[12px]">无匹配结果</div>
+                {/* 任务 */}
+                {searchResults!.tasks.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 px-2 pt-1 text-[10px] font-semibold text-emerald-300/80">
+                      <Target className="w-3 h-3" /> 任务
+                    </div>
+                    {searchResults!.tasks.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          setSelectedTask(t);
+                          navigate('/tasks');
+                          closeSearch();
+                        }}
+                        className="w-full text-left p-2.5 rounded-xl hover:bg-white/5 transition-colors"
+                      >
+                        <div className="text-[12px] font-semibold text-white truncate">{t.title}</div>
+                        <div className="text-[10px] font-mono text-emerald-300/80 mt-0.5">
+                          {t.id.slice(0, 8)} · {t.phase} · {t.assignee?.name ?? '未指派'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* 文件 */}
+                {searchResults!.files.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 px-2 pt-1 text-[10px] font-semibold text-cyan-300/80">
+                      <FileText className="w-3 h-3" /> 文件
+                    </div>
+                    {searchResults!.files.map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => {
+                          navigate('/files');
+                          closeSearch();
+                        }}
+                        className="w-full text-left p-2.5 rounded-xl hover:bg-white/5 transition-colors"
+                      >
+                        <div className="text-[12px] font-semibold text-white truncate">{f.title}</div>
+                        <div className="text-[10px] text-cyan-300/60 mt-0.5">{f.originalName} · {f.category}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* 知识库 */}
+                {searchResults!.articles.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 px-2 pt-1 text-[10px] font-semibold text-violet-300/80">
+                      <BookOpen className="w-3 h-3" /> 知识库
+                    </div>
+                    {searchResults!.articles.map((a) => (
+                      <button
+                        key={a.id}
+                        onClick={() => {
+                          navigate('/knowledge');
+                          closeSearch();
+                        }}
+                        className="w-full text-left p-2.5 rounded-xl hover:bg-white/5 transition-colors"
+                      >
+                        <div className="text-[12px] font-semibold text-white truncate">{a.title}</div>
+                        <div className="text-[10px] text-violet-300/60 mt-0.5">{a.category}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* 成员 */}
+                {searchResults!.members.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 px-2 pt-1 text-[10px] font-semibold text-amber-300/80">
+                      <Users className="w-3 h-3" /> 成员
+                    </div>
+                    {searchResults!.members.map((m) => (
+                      <button
+                        key={m.userId}
+                        onClick={() => {
+                          navigate('/collaboration');
+                          closeSearch();
+                        }}
+                        className="w-full flex items-center gap-2 p-2.5 rounded-xl hover:bg-white/5 transition-colors"
+                      >
+                        <span className="w-6 h-6 rounded-full liquid-icon-well flex items-center justify-center text-[9px] font-bold text-white/80 shrink-0">
+                          {m.avatar || m.name.slice(0, 2).toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-[12px] font-semibold text-white truncate">{m.name}</div>
+                          <div className="text-[10px] text-white/35 truncate">{m.email}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {totalHits === 0 && (
+                  <div className="p-3 text-center text-white/35 text-[12px]">无匹配结果：任务、文件、知识库、成员均未找到</div>
                 )}
               </motion.div>
             )}
@@ -105,14 +215,6 @@ export const TopBar: React.FC<TopBarProps> = ({
             {unreadCount > 0 && (
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]" />
             )}
-          </button>
-
-          <button
-            onClick={() => setShowMail(true)}
-            className="liquid-btn-ghost w-9 h-9 rounded-full flex items-center justify-center text-white/55 hover:text-white"
-            title="站内信"
-          >
-            <Mail className="w-4 h-4" />
           </button>
 
           <div className="relative">
@@ -144,10 +246,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   <button
                     onClick={() => {
                       setShowCreateMenu(false);
-                      // P1-3：跳转到文件归档页上传真实文件（替代原内存态 addFile）
                       navigate('/files');
-                      setQuickMsg('前往文件归档页上传文档');
-                      window.setTimeout(() => setQuickMsg(''), 1800);
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] text-white/75 hover:bg-white/5 hover:text-white"
                   >
@@ -156,8 +255,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   <button
                     onClick={() => {
                       setShowCreateMenu(false);
-                      setQuickMsg('请前往「日程管理」预约会议');
-                      window.setTimeout(() => setQuickMsg(''), 2000);
+                      navigate('/schedule');
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] text-white/75 hover:bg-white/5 hover:text-white"
                   >
@@ -170,68 +268,10 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
       </header>
 
-      <AnimatePresence>
-        {quickMsg && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="fixed bottom-6 right-6 z-[90] px-4 py-3 rounded-2xl bg-emerald-500/15 border border-emerald-400/35 text-emerald-100 text-[12px] backdrop-blur-xl"
-          >
-            {quickMsg}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <NotificationsModal
         open={showNotifications}
         onClose={() => setShowNotifications(false)}
       />
-
-      <LiquidModal
-        open={showMail}
-        onClose={() => setShowMail(false)}
-        title="站内信"
-        subtitle="协作消息与系统邮件"
-        icon={<Mail className="w-5 h-5" />}
-        footer={
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setShowMail(false)} className="h-10 px-4 rounded-full liquid-btn-ghost text-[12px] text-white/60">关闭</button>
-            <button
-              onClick={() => {
-                setQuickMsg('已全部标为已读');
-                setShowMail(false);
-                window.setTimeout(() => setQuickMsg(''), 1600);
-              }}
-              className="h-10 px-4 rounded-full liquid-btn-primary text-[12px] font-bold"
-            >
-              全部已读
-            </button>
-          </div>
-        }
-      >
-        <div className="space-y-2">
-          {[
-            { from: '系统', subject: 'Q2 里程碑进度周报已就绪', time: '今天 09:12', body: '本周吞吐 +12%，风险 2 项待处理，点击可查看完整报告。' },
-            { from: 'Elena', subject: '请查收交互流程设计 v3', body: '已上传 Figma 链接与走查纪要，请在今日 18:00 前反馈。', time: '昨天 16:40' },
-            { from: 'David', subject: 'CoverFlow 性能优化合并请求', body: 'MR !128 待你 Review，包含 will-change 与数量裁剪。', time: '昨天 11:05' },
-          ].map((m) => (
-            <button
-              key={m.subject}
-              type="button"
-              onClick={() => setQuickMsg(`已打开邮件：${m.subject}`)}
-              className="w-full text-left p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/12 transition-colors"
-            >
-              <div className="flex items-center justify-between gap-2 text-[11px] text-white/35 mb-1">
-                <span>{m.from}</span>
-                <span className="font-mono">{m.time}</span>
-              </div>
-              <div className="text-[12px] font-medium text-white">{m.subject}</div>
-              <p className="text-[11px] text-white/40 mt-1 line-clamp-2">{m.body}</p>
-            </button>
-          ))}
-        </div>
-      </LiquidModal>
     </>
   );
 };

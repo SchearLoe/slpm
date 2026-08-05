@@ -17,7 +17,7 @@ import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { springSoft } from '@/lib/motion';
 import { LiquidModal } from '@/components/ui/LiquidModal';
-import { useCompleteTask, useComments, useCreateComment, useTaskActivity, streamAiSuggest } from '@/lib/queries';
+import { useCompleteTask, useUpdateTask, useComments, useCreateComment, useTaskActivity, streamAiSuggest } from '@/lib/queries';
 import { apiError } from '@/lib/api';
 import confetti from 'canvas-confetti';
 
@@ -54,6 +54,7 @@ export const AISmartDetailPanel: React.FC = () => {
   const { selectedTask, setSelectedTask, setEditingTask, enableConfetti } = useApp();
   const { user } = useAuth();
   const completeTask = useCompleteTask();
+  const updateTask = useUpdateTask();
   // P1-1：评论 / 活动流（task 可能 undefined，hooks 内部用 enabled 守卫）
   const commentsQ = useComments(selectedTask?.id);
   const createComment = useCreateComment(selectedTask?.id);
@@ -432,7 +433,18 @@ export const AISmartDetailPanel: React.FC = () => {
                           },
                         },
                         { label: '编辑任务', action: () => setEditingTask(task) },
-                        { label: '标记延期', action: () => flash('已标记为延期（演示）') },
+                        {
+                          // P4-1：标记延期 → 真实调 API 更新状态
+                          label: '标记延期',
+                          action: async () => {
+                            try {
+                              await updateTask.mutateAsync({ id: task.id, status: '已延期' });
+                              flash('任务已标记为延期');
+                            } catch (err) {
+                              flash(apiError(err, '操作失败'));
+                            }
+                          },
+                        },
                       ].map((item) => (
                         <button
                           key={item.label}

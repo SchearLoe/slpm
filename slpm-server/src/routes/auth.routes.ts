@@ -1,12 +1,40 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import multer from 'multer';
+import path from 'node:path';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import { signToken } from '../lib/jwt.js';
 import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { ApiError } from '../middleware/error.js';
+import { env } from '../config/env.js';
+import { seedDemoForUser } from '../lib/seed.js';
 
 const router = Router();
+
+// P4-1：真实头像上传目录 uploads/avatars/（sendFile 需要绝对路径）
+const AVATAR_DIR = path.resolve(env.uploadDir, 'avatars');
+fs.mkdirSync(AVATAR_DIR, { recursive: true });
+
+const avatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, AVATAR_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || '.png';
+      cb(null, `${crypto.randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+  fileFilter: (_req, file, cb) => {
+    if (['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new ApiError(400, '仅支持 PNG/JPEG/WebP/GIF 图片'));
+    }
+  },
+});
 
 // 从姓名生成首字母头像（如 Brandon → BR）
 function avatarFromName(name: string): string {
@@ -118,6 +146,14 @@ router.post(
     });
 
     const token = signToken({ sub: user.id, email: user.email });
+
+    // P4-1：首个用户（且数据库尚无任何工作区）→ 自动播种「演示项目」教程数据
+    seedDemoForUser(user.id, user.name)
+      .then((seeded) => {
+        if (seeded) console.log(`🌱 已为 ${user.email} 创建演示项目（首次使用引导）`);
+      })
+      .catch(() => {}); // 播种失败不影响注册
+
     res.status(201).json({ token, user: publicUser(user) });
   }),
 );
@@ -169,6 +205,73 @@ router.get(
     if (!user) throw new ApiError(404, '用户不存在');
     res.json({ user: publicUser(user) });
   }),
+);
+
+// ---- PATCH /api/auth/me ----
+// 更新个人资料（显示名称 / 职位展示字段）
+const updateProfileSchema = z.object({
+  name: z.string().min(1, '姓名必填').max(40).optional(),
+  role: z.string().max(40).optional(),
+});
+router.patch(
+  '/me',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const parsed = updateProfileSchema.safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
+
+    const data: Record<string, string> = {};
+    if (parsed.data.name !== undefined) data.name = parsed.data.name;
+    if (parsed.data.role !== undefined) data.role = parsed.data.role;
+
+    const user = await prisma.user.update({
+      where: { id: req.user!.sub },
+      data,
+      include: {
+        settings: true,
+        memberships: { include: { workspace: { select: { id: true, name: true, slug: true, productId: true } } } },
+      },
+    });
+    res.json({ user: publicUser(user) });
+  }),
+);
+
+// ---- POST /api/auth/avatar ----
+// 真实头像上传：uploads/avatars/<uuid>.<ext>，User.avatar 存相对路径
+// （前端 <img src="/api/auth/avatar/xxx"> 直接展示）
+router.post(
+  '/avatar',
+  requireAuth,
+  avatarUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new ApiError(400, '缺少头像文件');
+    const avatarPath = path.join('avatars', req.file.filename).replace(/\\/g, '/');
+    const user = await prisma.user.update({
+      where: { id: req.user!.sub },
+      data: { avatar: avatarPath },
+      include: {
+        settings: true,
+        memberships: { include: { workspace: { select: { id: true, name: true, slug: true, productId: true } } } },
+      },
+    });
+    res.json({ user: publicUser(user), avatar: avatarPath });
+  }),
+);
+
+// ---- GET /api/auth/avatar/:file ----
+// 头像静态访问（无需鉴权，公开资源；文件名是 uuid 不可枚举）
+router.get(
+  '/avatar/:file',
+  (req, res) => {
+    const file = req.params.file;
+    // 防路径穿越：只允许单层文件名
+    if (!/^[\w.-]+$/.test(file)) {
+      return res.status(400).json({ error: '非法文件名' });
+    }
+    const abs = path.join(AVATAR_DIR, file);
+    if (!fs.existsSync(abs)) return res.status(404).json({ error: '头像不存在' });
+    res.sendFile(abs);
+  },
 );
 
 export default router;

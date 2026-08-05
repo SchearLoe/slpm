@@ -17,6 +17,7 @@ import {
   User,
   Package,
   Layers,
+  Camera,
 } from 'lucide-react';
 import { NavTab } from '@/types';
 import { clsx } from 'clsx';
@@ -24,7 +25,7 @@ import { LiquidModal } from '@/components/ui/LiquidModal';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { useApp } from '@/context/AppContext';
-import { apiError } from '@/lib/api';
+import { api, apiError } from '@/lib/api';
 import { getRoleConfig } from '@/lib/roleConfig';
 import { useCreateProduct } from '@/lib/queries';
 
@@ -48,7 +49,7 @@ const navItems: { id: NavTab; label: string; icon: React.ElementType; badge?: st
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { show, ToastEl } = useToast();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   // P1-2：从 AppContext 取真实工作区（替代原硬编码 + 本地 state）
   const { workspaces, currentWorkspace, setCurrentWorkspace, addWorkspace, currentRole, products, currentProduct, setCurrentProduct } = useApp();
   // P2-1：按角色排序导航
@@ -70,8 +71,48 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const [prodDesc, setProdDesc] = useState('');
   const [creating, setCreating] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   // profile 从当前登录用户初始化（替代原硬编码 Brandon）
   const [profile, setProfile] = useState({ name: user?.name || '', role: user?.role || '成员', email: user?.email || '' });
+
+  // P4-1：真实保存个人资料（PATCH /auth/me）
+  const saveProfile = async () => {
+    if (savingProfile) return;
+    setSavingProfile(true);
+    try {
+      await api.patch('/auth/me', { name: profile.name.trim(), role: profile.role.trim() });
+      await refreshUser();
+      setProfileOpen(false);
+      show('资料已保存');
+    } catch (err) {
+      show(apiError(err, '保存失败'));
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // P4-1：真实头像上传（POST /auth/avatar → 刷新用户）
+  const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 允许重复选择同一文件
+    if (!file) return;
+    try {
+      setAvatarPreview(URL.createObjectURL(file));
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post<{ user: { avatar: string }; avatar: string }>('/auth/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000,
+      });
+      setAvatarPreview(null);
+      await refreshUser();
+      show('头像已更新');
+    } catch (err) {
+      setAvatarPreview(null);
+      show(apiError(err, '头像上传失败'));
+    }
+  };
 
   // user 变化时（登录后）同步 profile
   React.useEffect(() => {
@@ -297,8 +338,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
             className="w-full liquid-pill flex items-center justify-between px-2.5 py-2 hover:border-white/20 transition-colors"
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-full liquid-icon-well flex items-center justify-center text-[11px] font-bold text-white/90 shrink-0">
-                {user?.avatar || profile.name.slice(0, 2).toUpperCase()}
+              <div className="w-8 h-8 rounded-full liquid-icon-well flex items-center justify-center text-[11px] font-bold text-white/90 shrink-0 overflow-hidden">
+                {user?.avatar && user.avatar.startsWith('avatars/') ? (
+                  <img src={`/api/auth/avatar/${user.avatar.split('/').pop()}`} alt={profile.name} className="w-full h-full object-cover" />
+                ) : (
+                  user?.avatar || profile.name.slice(0, 2).toUpperCase()
+                )}
               </div>
               <div className="min-w-0 text-left">
                 <div className="text-[12px] font-semibold text-white leading-tight truncate">{profile.name}</div>
@@ -387,19 +432,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
             <div className="flex gap-2">
               <button onClick={() => setProfileOpen(false)} className="h-10 px-4 rounded-full liquid-btn-ghost text-[12px] text-white/60">关闭</button>
               <button
-                onClick={() => {
-                  show('资料已保存');
-                  setProfileOpen(false);
-                }}
-                className="h-10 px-4 rounded-full liquid-btn-primary text-[12px] font-bold"
+                onClick={saveProfile}
+                disabled={savingProfile}
+                className="h-10 px-4 rounded-full liquid-btn-primary text-[12px] font-bold disabled:opacity-60"
               >
-                保存
+                {savingProfile ? '保存中…' : '保存'}
               </button>
             </div>
           </div>
         }
       >
         <div className="space-y-3">
+          {/* P4-1：真实头像上传 */}
+          <div className="flex items-center gap-3">
+            <div className="relative w-14 h-14 rounded-2xl overflow-hidden liquid-icon-well flex items-center justify-center text-[15px] font-bold text-white/90 shrink-0">
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="头像" className="w-full h-full object-cover" />
+              ) : (
+                profile.name.slice(0, 2).toUpperCase() || user?.avatar || 'U'
+              )}
+            </div>
+            <div className="space-y-1">
+              <label className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full liquid-btn-ghost text-[11px] text-white/70 cursor-pointer">
+                <Camera className="w-3.5 h-3.5" /> 上传头像
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={uploadAvatar} />
+              </label>
+              <p className="text-[10px] text-white/30">支持 PNG/JPEG/WebP/GIF，≤ 2MB</p>
+            </div>
+          </div>
           <div>
             <label className="text-[11px] text-white/40 mb-1.5 block">显示名称</label>
             <input className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
@@ -410,7 +470,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
           </div>
           <div>
             <label className="text-[11px] text-white/40 mb-1.5 block">邮箱</label>
-            <input className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} />
+            <input className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} disabled />
+            <p className="text-[10px] text-white/30 mt-1">邮箱为登录账号，不可修改</p>
           </div>
           <button
             type="button"

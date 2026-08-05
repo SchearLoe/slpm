@@ -6,8 +6,9 @@ import { LiquidModal } from '@/components/ui/LiquidModal';
 import { useToast } from '@/components/ui/Toast';
 import { springSoft } from '@/lib/motion';
 import { ViewTransition } from '@/components/ui/PageTransition';
-import { useTasks } from '@/lib/queries';
+import { useTasks, useCreateTask } from '@/lib/queries';
 import { computeOverview, computeMemberLoad, OverviewStats } from '@/lib/aggregations';
+import { apiError } from '@/lib/api';
 import { useApp } from '@/context/AppContext';
 import { getRoleConfig } from '@/lib/roleConfig';
 
@@ -18,15 +19,6 @@ const PHASE_COLOR: Record<string, string> = {
   开发实现: 'bg-cyan-400',
   测试验证: 'bg-indigo-400',
 };
-
-// 【演示】数据标签：无真实数据源的指标明确标注，避免误导
-function DemoBadge() {
-  return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white/10 text-white/50 text-[9px] font-semibold align-middle">
-      演示
-    </span>
-  );
-}
 
 export const ProjectOverviewPage: React.FC = () => {
   const { show, ToastEl } = useToast();
@@ -47,8 +39,53 @@ export const ProjectOverviewPage: React.FC = () => {
     return d <= weekEnd && t.status !== '已完成';
   }).sort((a,b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()), [tasks]);
 
-  const [selectedModule, setSelectedModule] = useState<{ name: string; progress: number; color: string } | null>(null);
+  const [selectedModule, setSelectedModule] = useState<{ name: string; progress: number; color: string; count: number } | null>(null);
   const [tab, setTab] = useState<'health' | 'risk' | 'team'>('health');
+
+  // P4-1：风险清单 = 真实任务自动识别（延期 / 7 天内截止）
+  const risks = useMemo(() => {
+    const list: { title: string; level: '高' | '中'; desc: string; task?: (typeof tasks)[number] }[] = [];
+    const overdue = tasks.filter((t) => t.status === '已延期');
+    if (overdue.length > 0) {
+      list.push({
+        title: `${overdue.length} 个任务已延期`,
+        level: '高',
+        desc: `「${overdue.slice(0, 3).map((t) => t.title).join('」、「')}」${overdue.length > 3 ? ` 等 ${overdue.length} 项` : ''}已逾期，建议确认阻塞并调整计划。`,
+        task: overdue[0],
+      });
+    }
+    const soon = tasks.filter((t) => {
+      if (!t.deadline || t.status === '已完成' || t.status === '已延期') return false;
+      return new Date(t.deadline).getTime() <= weekEnd.getTime();
+    });
+    if (soon.length > 0) {
+      list.push({
+        title: `${soon.length} 个任务 7 天内截止`,
+        level: '中',
+        desc: `「${soon.slice(0, 3).map((t) => t.title).join('」、「')}」${soon.length > 3 ? ' 等' : ''}即将到期，注意跟进。`,
+        task: soon[0],
+      });
+    }
+    return list;
+  }, [tasks, weekEnd]);
+
+  // P4-1：点击风险创建真实跟进任务
+  const createTask = useCreateTask();
+  const createFollowUp = async (r: { title: string; desc: string }) => {
+    try {
+      const task = await createTask.mutateAsync({
+        title: `跟进：${r.title}`,
+        phase: '需求评审',
+        priority: '高',
+        status: '待处理',
+        description: r.desc,
+        tags: ['风险跟进'],
+      });
+      show(`已创建跟进任务「${task.title}」`);
+    } catch (err) {
+      show(apiError(err, '创建失败'));
+    }
+  };
 
   // 模块进度 = 各阶段完成率（真实数据驱动，保留全部四阶段）
   const modules = useMemo(
@@ -69,10 +106,7 @@ export const ProjectOverviewPage: React.FC = () => {
       {/* 数据来源说明 */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[11px] text-white/50">
         <Info className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
-        <span>
-          以下指标基于真实任务数据聚合（里程碑、阻塞点、模块进度、成员负荷）；标注
-          <DemoBadge /> 的项需接入外部数据源（代码托管 / 测试平台），当前为演示。
-        </span>
+        <span>以下指标基于当前工作区的真实任务数据实时聚合（里程碑、阻塞点、模块进度、成员负荷）。</span>
       </div>
 
       <motion.div
@@ -89,15 +123,13 @@ export const ProjectOverviewPage: React.FC = () => {
               SLPM 旗舰版
             </div>
             <h2 className="text-[22px] font-extrabold text-white tracking-tight flex items-center gap-2 flex-wrap">
-              任务总览 <DemoBadge />
+              任务总览
               <span className="text-white/50 text-[14px] font-medium">
                 共 {stats.total} 项 · 已完成 {stats.completed} · 进行中 {stats.inProgress}
               </span>
             </h2>
-            <p className="text-[12px] text-white/50 max-w-xl leading-relaxed flex items-center gap-1 flex-wrap">
-              原健康度 / 需求收敛率 / 测试通过率为
-              <DemoBadge />
-              数据，需接入测试与需求平台。当前真实完成度见右侧。
+            <p className="text-[12px] text-white/50 max-w-xl leading-relaxed">
+              完成度、阶段进度与成员负荷均为当前工作区的真实任务聚合。
             </p>
             {/* P2-2：角色标签 */}
             {isReadOnly && (
@@ -146,10 +178,10 @@ export const ProjectOverviewPage: React.FC = () => {
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {[
-          { title: '任务完成', value: `${stats.completed} / ${stats.total}`, tip: `完成率 ${stats.completionRate}%`, icon: CheckCircle2, color: 'text-emerald-300', demo: false },
-          { title: '研发代码提交', value: '1,248', tip: '较上周 +18%', icon: Zap, color: 'text-cyan-300', demo: true },
-          { title: '团队平均负荷', value: `${memberLoad.length ? Math.round(memberLoad.reduce((s, m) => s + m.load, 0) / memberLoad.length) : 0}%`, tip: '基于在办任务归一化', icon: Users, color: 'text-violet-300', demo: false },
-          { title: '潜在阻塞点', value: `${stats.blockedCount} 项`, tip: `${stats.overdue} 延期 / ${stats.pending} 待处理`, icon: AlertTriangle, color: 'text-rose-300', demo: false },
+          { title: '任务完成', value: `${stats.completed} / ${stats.total}`, tip: `完成率 ${stats.completionRate}%`, icon: CheckCircle2, color: 'text-emerald-300' },
+          { title: '进行中任务', value: `${stats.total - stats.completed} 项`, tip: '当前在办（含待处理）', icon: Zap, color: 'text-cyan-300' },
+          { title: '团队平均负荷', value: `${memberLoad.length ? Math.round(memberLoad.reduce((s, m) => s + m.load, 0) / memberLoad.length) : 0}%`, tip: '基于在办任务归一化', icon: Users, color: 'text-violet-300' },
+          { title: '潜在阻塞点', value: `${stats.blockedCount} 项`, tip: `${stats.overdue} 延期 / ${stats.pending} 待处理`, icon: AlertTriangle, color: 'text-rose-300' },
         ].map((c, i) => (
           <motion.button
             key={c.title}
@@ -158,14 +190,11 @@ export const ProjectOverviewPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05, ...springSoft }}
             whileHover={{ y: -2 }}
-            onClick={() => show(`已打开：${c.title}`)}
+            onClick={() => show(`${c.title}：${c.value}（${c.tip}），基于当前工作区真实任务聚合`)}
             className="liquid-glass liquid-glass-hover p-4 text-left space-y-2"
           >
             <div className="flex items-center justify-between text-[11px] text-white/40">
-              <span className="flex items-center gap-1">
-                {c.title}
-                {c.demo && <DemoBadge />}
-              </span>
+              <span>{c.title}</span>
               <c.icon className={`w-4 h-4 ${c.color}`} />
             </div>
             <div className="text-[22px] font-extrabold text-white">{c.value}</div>
@@ -319,24 +348,33 @@ export const ProjectOverviewPage: React.FC = () => {
       {tab === 'risk' && (
         <GlassCard className="p-5 space-y-3">
           <h3 className="text-[13px] font-bold text-white flex items-center gap-2">
-            风险清单 <DemoBadge />
+            风险清单
+            <span className="text-[10px] font-normal text-white/40">基于真实任务自动识别</span>
           </h3>
-          {[
-            { title: '需求范围蔓延', level: '高', desc: 'WXB-2025-001 新增 4 项次要功能' },
-            { title: '设计交付时延', level: '中', desc: '原型评审节点可能延后 0.5 天' },
-          ].map((r) => (
-            <button
-              key={r.title}
-              onClick={() => show(`已创建风险跟进：${r.title}`)}
-              className="w-full text-left p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-rose-400/30 transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] font-semibold text-white">{r.title}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-300 border border-rose-400/30">{r.level}</span>
-              </div>
-              <p className="text-[11px] text-white/45 mt-1">{r.desc}</p>
-            </button>
-          ))}
+          {risks.length === 0 ? (
+            <p className="text-[12px] text-white/35 py-3">当前没有延期或临近截止的任务 ✓</p>
+          ) : (
+            <div className="space-y-2">
+              {risks.map((r) => (
+                <button
+                  key={r.title}
+                  onClick={() => r.task && createFollowUp(r)}
+                  className="w-full text-left p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-rose-400/30 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] font-semibold text-white">{r.title}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md border ${r.level === '高' ? 'bg-rose-500/15 text-rose-300 border-rose-400/30' : 'bg-amber-500/15 text-amber-300 border-amber-400/30'}`}>{r.level}</span>
+                  </div>
+                  <p className="text-[11px] text-white/45 mt-1">{r.desc}</p>
+                  {r.task && (
+                    <span className="text-[10px] text-rose-300/70 mt-1.5 inline-flex items-center gap-1">
+                      点击创建跟进任务 <ArrowRight className="w-3 h-3" />
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </GlassCard>
       )}
 
@@ -380,15 +418,6 @@ export const ProjectOverviewPage: React.FC = () => {
         footer={
           <div className="flex justify-end gap-2">
             <button onClick={() => setSelectedModule(null)} className="h-10 px-4 rounded-full liquid-btn-ghost text-[12px] text-white/60">关闭</button>
-            <button
-              onClick={() => {
-                show(`已订阅阶段进度：${selectedModule?.name}`);
-                setSelectedModule(null);
-              }}
-              className="h-10 px-4 rounded-full liquid-btn-primary text-[12px] font-bold"
-            >
-              订阅进度
-            </button>
           </div>
         }
       >
@@ -398,7 +427,7 @@ export const ProjectOverviewPage: React.FC = () => {
             <div className="w-full h-2 rounded-full bg-black/40 overflow-hidden border border-white/10">
               <div className={`h-full ${selectedModule.color}`} style={{ width: `${selectedModule.progress}%` }} />
             </div>
-            <p>点击「订阅进度」后，该阶段变更将推送到消息中心。</p>
+            <p>共 {selectedModule.count} 项任务，完成率基于当前工作区真实数据。</p>
           </div>
         )}
       </LiquidModal>

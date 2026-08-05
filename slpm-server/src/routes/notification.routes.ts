@@ -1,7 +1,10 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler, requireAuth } from '../middleware/auth.js';
+import { requireWorkspace } from '../middleware/workspace.js';
 import { ApiError } from '../middleware/error.js';
+import { emitToUser } from '../lib/ws.js';
 
 /**
  * P1-4 通知系统（站内信）—— 路由。
@@ -98,6 +101,56 @@ router.delete(
       where: { userId: req.user!.sub, read: true },
     });
     res.json({ ok: true });
+  }),
+);
+
+// ---- POST /api/notifications/send ----
+// P4-1：成员间站内信（团队协作页发消息 / AI 页发送协同提醒）。
+// 需要工作区上下文：收件人必须是当前工作区成员。
+const sendSchema = z.object({
+  userId: z.string().min(1, '缺少收件人'),
+  title: z.string().min(1, '标题必填').max(120),
+  body: z.string().max(1000).optional().default(''),
+});
+router.post(
+  '/send',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    const parsed = sendSchema.safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
+
+    if (parsed.data.userId === req.user!.sub) {
+      throw new ApiError(400, '不能给自己发送站内信');
+    }
+
+    // 收件人必须是当前工作区成员
+    const target = await prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: req.workspace!.id, userId: parsed.data.userId } },
+      include: { user: { select: { name: true } } },
+    });
+    if (!target) throw new ApiError(404, '收件人不在当前工作区');
+
+    const sender = await prisma.user.findUnique({
+      where: { id: req.user!.sub },
+      select: { name: true },
+    });
+
+    const notification = await prisma.notification.create({
+      data: {
+        userId: parsed.data.userId,
+        workspaceId: req.workspace!.id,
+        type: 'system',
+        title: `${sender?.name ?? '同事'}：${parsed.data.title}`,
+        body: parsed.data.body,
+        read: false,
+      },
+    });
+
+    // P1-6：WebSocket 实时推送
+    emitToUser(parsed.data.userId, 'notification', shape(notification));
+
+    res.status(201).json({ notification: shape(notification) });
   }),
 );
 

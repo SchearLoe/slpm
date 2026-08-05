@@ -509,6 +509,20 @@ export function useClearReadNotifications() {
   });
 }
 
+// P4-1：成员间站内信（团队协作页发消息 / AI 页发送协同提醒）
+export function useSendMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, title, body }: { userId: string; title: string; body?: string }) => {
+      const res = await api.post<{ notification: AppNotification }>('/notifications/send', { userId, title, body });
+      return res.data.notification;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+    },
+  });
+}
+
 // ============ AI（P1-4 真实接入：管理员配置 + 任务建议代理） ============
 
 const AI_CONFIG_KEY = ['ai-config'] as const;

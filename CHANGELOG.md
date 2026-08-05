@@ -6,6 +6,35 @@
 
 ## 2026-08-05
 
+### P4-1：演示残留清理 + 系统初始化（超级管理员 / 种子数据）
+
+**后端**
+- `auth.routes.ts`：新增 `PATCH /api/auth/me`（更新显示名称/职位）+ `POST /api/auth/avatar`（multer 头像上传，2MB 限制，存 `uploads/avatars/`）+ `GET /api/auth/avatar/:file`（静态访问，防路径穿越）
+- 新增 `lib/seed.ts`：
+  - `ensureSystemAdmin()` —— 服务启动时若不存在 system_admin 自动创建（优先读 .env 的 `INITIAL_ADMIN_EMAIL/INITIAL_ADMIN_PASSWORD`，未配置则随机生成密码打印到控制台供安装人员使用）
+  - `seedDemoForUser()` —— 首个用户注册时自动创建「演示项目」工作区（示例任务覆盖四阶段 + 里程碑 + 甘特起始日、示例日程、知识库文章、欢迎通知），作为新装教程指引
+  - `seedDemoManual()` —— `npm run seed:demo` 手动为存量库创建演示账号（demo@slpm.local / demo1234）
+- `notification.routes.ts`：新增 `POST /api/notifications/send`（成员间真实站内信，需工作区上下文，收件人必须是成员，WebSocket 实时推送）
+- `server.ts`：启动引导改为 async bootstrap（先 ensureSystemAdmin 再监听端口）
+
+**前端（纯前端假数据全部去除）**
+- `TopBar.tsx`：**站内信假弹窗删除**；搜索升级为**跨模块搜索**（任务/文件/知识库文章/成员，分组展示，点击跳转对应模块）；**⌘K / Ctrl+K 聚焦搜索框**（真实快捷键）；快捷菜单「预约日程」改为真实跳转
+- `Sidebar.tsx`：个人资料「保存」接真实 API（PATCH /auth/me + refreshUser）；**真实头像上传**（预览 + POST /auth/avatar）；侧栏头像显示真实图片
+- `AIAnalyticsPage.tsx` 全面真实化：
+  - 默认建议/风险改为**规则推导**（延期任务→高风险、3 天内截止→中风险、评审积压/负荷不均→建议；AI 重算后仍用真实 LLM 输出）
+  - KPI 改为真实聚合（完成率/进行中/延期/瓶颈阶段），删除「演示」标注
+  - 吞吐趋势 = **按任务创建日期分桶的真实计数**（7d 每日 / 30d 每 3 天 / Q2 按周）
+  - 「导出」= **真实 CSV 下载**（带 BOM 支持 Excel 中文）
+  - 「创建跟进任务」= 真实创建任务；「发送协同提醒」= 真实站内信
+- `ProjectOverviewPage.tsx`：删除假 KPI「研发代码提交」改为「进行中任务」；风险清单改为**真实任务自动识别**（延期/临期，点击创建真实跟进任务）；删除「订阅进度」假按钮与演示标注
+- `TaskManagementPage.tsx`：删除硬编码 **CoverFlowDeck 假卡片墙**（及 DocPreviewModal），替换为 `RecentFilesPanel`（真实文件列表 + 空态引导）
+- `TeamCollaborationPage.tsx`：发消息 = **真实站内信**（POST /notifications/send）；负荷饱和度改为真实归一化计算（在办数相对最高者），删除 ×10% 演示公式
+- `SettingsCenterPage.tsx`：账号页真实头像上传 + 资料真保存（从真实用户初始化）；删除假会话/设备列表、假通知渠道切换（标注站内信已启用/其他未接入）；「清理缓存」= 真实清 TanStack 缓存、「立即同步」= 真实全量重拉、「导出」= 真实任务 CSV；删除假「AI 模型与推理」面板；「清空本地演示数据」改为「清除本地数据并退出」（真实 localStorage.clear + logout）
+- `AISmartDetailPanel.tsx`：「标记延期」= 真实调 API 更新状态
+- `types/index.ts`：删除 CardDeckItem 假类型；TaskItem 加 createdAt（吞吐聚合用）
+
+**验证**：前后端 tsc 零错误；API 冒烟通过（资料更新/头像上传/静态访问/非法类型 400/路径穿越 400/站内信）；浏览器 E2E 通过（跨模块搜索、AI 页真实化、最近归档面板、无任何演示残留）；测试数据已清理。
+
 ### P3：产品线 + 版本管理 + 产品经理跨项目视图
 
 **数据模型（2 迁移，2 新表 + 3 新字段）**

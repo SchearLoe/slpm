@@ -13,6 +13,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "db:reset": "prisma migrate reset --force"
   },
   "dependencies": {

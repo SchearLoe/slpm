@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CardDeckItem, Product, TaskItem, UserSettings, WorkspaceMembership, WsRole } from '@/types';
+import { Product, TaskItem, UserSettings, WorkspaceMembership, WsRole } from '@/types';
 import { useAuth } from './AuthContext';
 import { api, productStore, workspaceStore } from '@/lib/api';
 import { useProducts } from '@/lib/queries';
@@ -82,8 +82,6 @@ interface AppContextType {
   setIsNewTaskOpen: (val: boolean) => void;
   editingTask: TaskItem | null;
   setEditingTask: (task: TaskItem | null) => void;
-  selectedDoc: CardDeckItem | null;
-  setSelectedDoc: (doc: CardDeckItem | null) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -193,7 +191,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Modals
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
-  const [selectedDoc, setSelectedDoc] = useState<CardDeckItem | null>(null);
 
   // P1-2：切换工作区 —— 写 localStorage（axios 自动注入 header）+ 失效数据缓存
   const setCurrentWorkspace = (id: string) => {
@@ -251,8 +248,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsNewTaskOpen,
         editingTask,
         setEditingTask,
-        selectedDoc,
-        setSelectedDoc,
       }}
     >
       {children}

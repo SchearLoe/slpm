@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, UserCheck, MessageSquare, Mail } from 'lucide-react';
+import { Users, UserCheck, MessageSquare, UserMinus } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { useToast } from '@/components/ui/Toast';
 import { useApp } from '@/context/AppContext';
 import { springSoft } from '@/lib/motion';
-import { useTasks, useWorkspaceMembers, useInviteMember, useRemoveMember, useUpdateMemberRole } from '@/lib/queries';
+import { useTasks, useWorkspaceMembers, useInviteMember, useRemoveMember, useUpdateMemberRole, useSendMessage } from '@/lib/queries';
 import { apiError } from '@/lib/api';
 import { ROLE_OPTIONS, getRoleConfig } from '@/lib/roleConfig';
 import { WsRole } from '@/types';
@@ -40,12 +40,26 @@ export const TeamCollaborationPage: React.FC = () => {
   const inviteMut = useInviteMember(wsId);
   const removeMut = useRemoveMember(wsId);
   const updateRoleMut = useUpdateMemberRole(wsId);
+  // P4-1：真实站内信（替代演示 toast）
+  const sendMsg = useSendMessage();
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [msgOpen, setMsgOpen] = useState<(typeof members)[number] | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<WsRole>('dev');
   const [msgText, setMsgText] = useState('');
+
+  // P4-1：真实站内信发送
+  const handleSendMsg = async () => {
+    if (!msgOpen || !msgText.trim() || sendMsg.isPending) return;
+    try {
+      await sendMsg.mutateAsync({ userId: msgOpen.userId, title: '协同消息', body: msgText.trim() });
+      setMsgOpen(null);
+      show(`站内信已发送给 ${msgOpen.name}`);
+    } catch (err) {
+      show(apiError(err, '发送失败'));
+    }
+  };
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,8 +126,9 @@ export const TeamCollaborationPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
         {members.map((member, idx) => {
           const stats = inProgressByUser.get(member.userId) ?? { inProgress: 0, completed: 0 };
-          // 负荷饱和度：在办任务 ×10% 上限 95%（演示公式，无真实工时数据源）
-          const workload = Math.min(95, stats.inProgress * 10);
+          // P4-1：负荷饱和度 = 在办任务数相对最高者的归一化（真实数据，替代 ×10% 公式）
+          const maxInProgress = Math.max(1, ...members.map((m) => inProgressByUser.get(m.userId)?.inProgress ?? 0));
+          const workload = stats.inProgress > 0 ? Math.round((stats.inProgress / maxInProgress) * 100) : 0;
           const isAdmin = member.role === 'admin';
           return (
             <motion.div
@@ -176,7 +191,7 @@ export const TeamCollaborationPage: React.FC = () => {
                       className="liquid-btn-ghost w-9 h-9 rounded-xl flex items-center justify-center text-white/60 hover:text-rose-300"
                       title="移除成员"
                     >
-                      <Mail className="w-3.5 h-3.5" />
+                      <UserMinus className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
@@ -233,14 +248,11 @@ export const TeamCollaborationPage: React.FC = () => {
           <div className="flex justify-end gap-2">
             <button onClick={() => setMsgOpen(null)} className="h-10 px-4 rounded-full liquid-btn-ghost text-[12px] text-white/60">取消</button>
             <button
-              onClick={() => {
-                if (!msgText.trim()) return;
-                show(`已发送给 ${msgOpen?.name}（演示）`);
-                setMsgOpen(null);
-              }}
-              className="h-10 px-4 rounded-full liquid-btn-primary text-[12px] font-bold"
+              onClick={handleSendMsg}
+              disabled={!msgText.trim() || sendMsg.isPending}
+              className="h-10 px-4 rounded-full liquid-btn-primary text-[12px] font-bold disabled:opacity-50"
             >
-              发送
+              {sendMsg.isPending ? '发送中…' : '发送'}
             </button>
           </div>
         }
@@ -249,7 +261,7 @@ export const TeamCollaborationPage: React.FC = () => {
           rows={4}
           value={msgText}
           onChange={(e) => setMsgText(e.target.value)}
-          placeholder="输入协同消息...（站内信推送需通知系统，当前为演示）"
+          placeholder="输入协同消息，将作为站内信推送给对方…"
           className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white resize-none"
         />
       </LiquidModal>

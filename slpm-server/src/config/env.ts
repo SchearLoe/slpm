@@ -18,4 +18,7 @@ export const env = {
   uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
   // P1-4：AI API Key 加密密钥（强 required，无 fallback）
   aiEncryptionKey: required('AI_ENCRYPTION_KEY'),
+  // P4-1：超级管理员初始化（可选，未配置则随机生成并打印到控制台）
+  initialAdminEmail: process.env.INITIAL_ADMIN_EMAIL,
+  initialAdminPassword: process.env.INITIAL_ADMIN_PASSWORD,
 } as const;
