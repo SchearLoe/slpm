@@ -6,6 +6,27 @@
 
 ## 2026-08-05
 
+### P4-2：看板拖拽 + 任务工时/燃尽图 + 日程冲突预警 + 通知偏好
+
+**数据模型（1 迁移，1 新字段 + 3 设置字段）**
+- Task 加 `estimatedHours Float?`（预估工时，小时）
+- UserSettings 加 `notifyMention` / `notifyAssign` / `notifyDeadline`（通知偏好，默认全开）
+
+**后端**
+- `task.routes.ts`：create/update 支持 `estimatedHours`（0-10000，可空）；活动流 FIELD_LABELS 加「预估工时」
+- `settings.routes.ts`：GET/PUT 支持通知偏好三字段（upsert 兼容旧记录）
+- `notify.ts`：`filterBySetting()` —— 发通知前按收件人的 UserSettings 过滤（关闭 @提及/指派通知的成员不打扰；记录缺失视为开启）
+- `schedule.routes.ts`：`findConflicts()` —— 创建/编辑日程时检测同工作区时间重叠（同主办或参会人姓名交集，排除自身），响应带 `conflicts[]`
+
+**前端**
+- `TaskGroupList.tsx`：**看板拖拽改阶段**（HTML5 drag & drop，拖到目标阶段组即 PATCH phase，拖拽中高亮 + 源卡半透明）；阶段组头显示**预估工时小计**（如 `12h`）；任务行显示单任务工时
+- `NewTaskModal.tsx` / `EditTaskModal.tsx`：预估工时输入（number，step 0.5）
+- `ProjectOverviewPage.tsx`：新增**进度燃尽图**（健康 tab，SVG 曲线：按截止日期排序的剩余任务曲线 vs 理想直线，已完成/未完成/理想进度图例）
+- `ScheduleManagementPage.tsx`：创建/编辑日程后若有冲突 → toast 预警（显示首个冲突日程）
+- `SettingsCenterPage.tsx`：通知偏好三开关真实持久化（乐观更新 + 失败提示），其余偏好标注本地
+
+**验证**：前后端 tsc 零错误；API 冒烟通过（工时创建/更新、通知偏好持久化、日程冲突创建/编辑检测含自身排除）；浏览器 E2E 通过（工时显示与组小计、燃尽图空态与曲线、设置页开关→后端闭环）。拖拽交互代码已实现（IAB 无法合成 HTML5 DnD 手势，逻辑审查 + 后端 PATCH 验证）。测试数据已清理。
+
 ### P4-1：演示残留清理 + 系统初始化（超级管理员 / 种子数据）
 
 **后端**

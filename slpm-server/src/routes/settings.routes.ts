@@ -11,6 +11,10 @@ const DEFAULT_SETTINGS = {
   accentColor: 'emerald',
   glassBlur: 'ultra',
   enableConfetti: true,
+  // P4-2：通知偏好
+  notifyMention: true,
+  notifyAssign: true,
+  notifyDeadline: true,
 };
 
 // PUT 校验：三个字段均校验枚举/类型，防注入与脏数据
@@ -18,6 +22,10 @@ const updateSchema = z.object({
   accentColor: z.enum(['emerald', 'cyan', 'purple']).optional(),
   glassBlur: z.enum(['standard', 'ultra', 'max']).optional(),
   enableConfetti: z.boolean().optional(),
+  // P4-2：通知偏好（@提及 / 任务指派 / 截止提醒）
+  notifyMention: z.boolean().optional(),
+  notifyAssign: z.boolean().optional(),
+  notifyDeadline: z.boolean().optional(),
 });
 
 // ---- GET /api/settings ----
@@ -35,6 +43,9 @@ router.get(
             accentColor: record.accentColor as 'emerald' | 'cyan' | 'purple',
             glassBlur: record.glassBlur as 'standard' | 'ultra' | 'max',
             enableConfetti: record.enableConfetti,
+            notifyMention: record.notifyMention,
+            notifyAssign: record.notifyAssign,
+            notifyDeadline: record.notifyDeadline,
           }
         : { ...DEFAULT_SETTINGS },
     });
@@ -59,6 +70,9 @@ router.put(
         accentColor: data.accentColor ?? DEFAULT_SETTINGS.accentColor,
         glassBlur: data.glassBlur ?? DEFAULT_SETTINGS.glassBlur,
         enableConfetti: data.enableConfetti ?? DEFAULT_SETTINGS.enableConfetti,
+        notifyMention: data.notifyMention ?? DEFAULT_SETTINGS.notifyMention,
+        notifyAssign: data.notifyAssign ?? DEFAULT_SETTINGS.notifyAssign,
+        notifyDeadline: data.notifyDeadline ?? DEFAULT_SETTINGS.notifyDeadline,
       },
       update: data,
     });
@@ -68,6 +82,9 @@ router.put(
         accentColor: record.accentColor as 'emerald' | 'cyan' | 'purple',
         glassBlur: record.glassBlur as 'standard' | 'ultra' | 'max',
         enableConfetti: record.enableConfetti,
+        notifyMention: record.notifyMention,
+        notifyAssign: record.notifyAssign,
+        notifyDeadline: record.notifyDeadline,
       },
     });
   }),

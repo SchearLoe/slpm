@@ -13,6 +13,9 @@ const DEFAULT_SETTINGS: UserSettings = {
   accentColor: 'emerald',
   glassBlur: 'ultra',
   enableConfetti: true,
+  notifyMention: true,
+  notifyAssign: true,
+  notifyDeadline: true,
 };
 
 // 玻璃模糊强度 → CSS 变量 --blur-liquid 的像素值

@@ -125,11 +125,19 @@ export const ScheduleManagementPage: React.FC = () => {
     };
     try {
       if (editing) {
-        await updateMut.mutateAsync({ id: editing.id, ...payload });
+        const r = await updateMut.mutateAsync({ id: editing.id, ...payload });
         show('日程已更新');
+        // P4-2：冲突预警
+        if (r.conflicts && r.conflicts.length > 0) {
+          show(`⚠️ 时间冲突：与「${r.conflicts[0].title}」等 ${r.conflicts.length} 个日程重叠`);
+        }
       } else {
-        await createMut.mutateAsync(payload);
+        const r = await createMut.mutateAsync(payload);
         show('日程已创建');
+        // P4-2：冲突预警
+        if (r.conflicts && r.conflicts.length > 0) {
+          show(`⚠️ 时间冲突：与「${r.conflicts[0].title}」等 ${r.conflicts.length} 个日程重叠`);
+        }
       }
       setSelectedDate(form.startInput.slice(0, 10));
       setShowCreate(false);

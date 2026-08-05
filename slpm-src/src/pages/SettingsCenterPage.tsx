@@ -125,14 +125,25 @@ export const SettingsCenterPage: React.FC = () => {
   const [aiDocLink, setAiDocLink] = useState(true);
   const [aiVoice, setAiVoice] = useState(false);
 
-  // notify
+  // notify（P4-2：@提及 / 指派 / 截止 三个偏好真实持久化到后端 UserSettings）
   const [mailNotify, setMailNotify] = useState(true);
   const [desktopNotify, setDesktopNotify] = useState(true);
-  const [taskDue, setTaskDue] = useState(true);
-  const [mention, setMention] = useState(true);
+  const [taskDue, setTaskDue] = useState(user?.settings?.notifyDeadline ?? true);
+  const [mention, setMention] = useState(user?.settings?.notifyMention ?? true);
+  const [assignNotify, setAssignNotify] = useState(user?.settings?.notifyAssign ?? true);
   const [weeklyReport, setWeeklyReport] = useState(false);
   const [quietHours, setQuietHours] = useState(true);
   const [sound, setSound] = useState(true);
+
+  // P4-2：通知偏好变更 → 真实落库（乐观更新，失败回滚提示）
+  const persistNotify = async (patch: { notifyMention?: boolean; notifyAssign?: boolean; notifyDeadline?: boolean }) => {
+    try {
+      await api.put('/settings', patch);
+      await refreshUser();
+    } catch {
+      show('通知偏好保存失败，请重试');
+    }
+  };
 
   // account（P4-1：从真实用户初始化）
   const [displayName, setDisplayName] = useState(user?.name ?? '');
@@ -571,8 +582,9 @@ export const SettingsCenterPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 <Toggle checked={desktopNotify} onChange={setDesktopNotify} label="桌面通知" desc="浏览器/系统级推送" />
                 <Toggle checked={mailNotify} onChange={setMailNotify} label="邮件通知" desc="重要任务与评审结论邮件" />
-                <Toggle checked={taskDue} onChange={setTaskDue} label="截止前提醒" desc="任务到期前 24h / 2h 提醒" />
-                <Toggle checked={mention} onChange={setMention} label="@ 提及" desc="被协作成员提及时即时通知" />
+                <Toggle checked={mention} onChange={(v) => { setMention(v); persistNotify({ notifyMention: v }); }} label="@ 提及" desc="被协作成员提及时即时通知（保存到账号）" />
+                <Toggle checked={assignNotify} onChange={(v) => { setAssignNotify(v); persistNotify({ notifyAssign: v }); }} label="任务指派" desc="新任务指派给我时通知（保存到账号）" />
+                <Toggle checked={taskDue} onChange={(v) => { setTaskDue(v); persistNotify({ notifyDeadline: v }); }} label="截止前提醒" desc="任务到期前 24h / 2h 提醒（保存到账号）" />
                 <Toggle checked={weeklyReport} onChange={setWeeklyReport} label="周报摘要" desc="每周一汇总上周吞吐与风险" />
                 <Toggle checked={quietHours} onChange={setQuietHours} label="免打扰时段" desc="22:00–08:00 仅保留紧急通知" />
                 <Toggle checked={sound} onChange={setSound} label="提示音" desc="新消息与完成任务轻提示音" />

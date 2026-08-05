@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, CheckCircle2, AlertTriangle, Users, Zap, ShieldCheck, PieChart, ArrowRight, Info, Clock, Target } from 'lucide-react';
+import { BarChart3, CheckCircle2, AlertTriangle, Users, Zap, ShieldCheck, PieChart, ArrowRight, Info, Clock, Target, TrendingUp } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { useToast } from '@/components/ui/Toast';
@@ -86,6 +86,31 @@ export const ProjectOverviewPage: React.FC = () => {
       show(apiError(err, '创建失败'));
     }
   };
+
+  // P4-2：进度燃尽（按截止日期排序，剩余任务累计曲线 vs 理想直线）
+  const burndown = useMemo(() => {
+    const withDeadline = tasks
+      .filter((t) => t.deadline)
+      .sort((a, b) => new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime());
+    const total = withDeadline.length;
+    if (total === 0) return null;
+    const W = 100;
+    const H = 44;
+    let completedSoFar = 0;
+    const points = withDeadline.map((t, i) => {
+      if (t.status === '已完成') completedSoFar += 1;
+      const x = total > 1 ? (i / (total - 1)) * W : W;
+      const remaining = total - completedSoFar;
+      const y = H - (remaining / total) * H;
+      return { x, y, done: t.status === '已完成' };
+    });
+    return {
+      total,
+      completed: completedSoFar,
+      points,
+      lastDeadline: withDeadline[withDeadline.length - 1].deadline!,
+    };
+  }, [tasks]);
 
   // 模块进度 = 各阶段完成率（真实数据驱动，保留全部四阶段）
   const modules = useMemo(
@@ -341,6 +366,51 @@ export const ProjectOverviewPage: React.FC = () => {
                 ))
               )}
             </div>
+          </GlassCard>
+
+          {/* P4-2：进度燃尽图（按截止日期排序的剩余任务曲线 vs 理想直线） */}
+          <GlassCard className="p-5 space-y-3 lg:col-span-2">
+            <h3 className="text-[13px] font-bold text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-emerald-300" />
+              进度燃尽
+              <span className="text-[10px] font-normal text-white/35">
+                {burndown ? `${burndown.total} 个有截止日期的任务 · 已完成 ${burndown.completed}` : '无截止日期任务'}
+              </span>
+            </h3>
+            {burndown ? (
+              <div className="space-y-2">
+                <svg viewBox="0 0 100 44" className="w-full h-36" preserveAspectRatio="none">
+                  {/* 网格线 */}
+                  {[0, 1, 2, 3].map((i) => (
+                    <line key={i} x1="0" y1={i * 11} x2="100" y2={i * 11} stroke="rgba(255,255,255,0.06)" strokeWidth="0.3" />
+                  ))}
+                  {/* 理想直线：从 (0, 总量) 到 (100, 0) */}
+                  <line x1="0" y1="0" x2="100" y2="44" stroke="rgba(255,255,255,0.25)" strokeWidth="0.5" strokeDasharray="2 2" />
+                  {/* 实际燃尽曲线 */}
+                  <polyline
+                    points={burndown.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                    fill="none"
+                    stroke="#34d399"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {burndown.points.map((p, i) => (
+                    <circle key={i} cx={p.x} cy={p.y} r="0.9" fill={p.done ? '#34d399' : '#fbbf24'} />
+                  ))}
+                </svg>
+                <div className="flex items-center justify-between text-[10px] text-white/35">
+                  <span>最晚截止：{new Date(burndown.lastDeadline).toLocaleDateString('zh-CN')}</span>
+                  <span className="flex items-center gap-3">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400" />已完成</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />未完成</span>
+                    <span className="flex items-center gap-1"><span className="w-px h-2.5 bg-white/40" />理想进度</span>
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[12px] text-white/35 py-3">为任务设置截止日期后，将在此显示燃尽曲线</p>
+            )}
           </GlassCard>
         </div>
       )}

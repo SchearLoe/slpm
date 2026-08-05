@@ -1,27 +1,50 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ArrowUpDown, LayoutGrid } from 'lucide-react';
+import { ChevronDown, ArrowUpDown, LayoutGrid, Clock } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/components/ui/Toast';
 import { clsx } from 'clsx';
 import { listItemVariants, springSoft } from '@/lib/motion';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
-import { useTasks } from '@/lib/queries';
+import { useTasks, useUpdateTask } from '@/lib/queries';
+import { apiError } from '@/lib/api';
 import { getRoleConfig } from '@/lib/roleConfig';
 
 export const TaskGroupList: React.FC = () => {
   const { selectedTask, setSelectedTask, setIsNewTaskOpen, currentRole } = useApp();
   const { user } = useAuth();
+  const { show, ToastEl } = useToast();
   const { data: tasks = [] } = useTasks();
+  const updateTask = useUpdateTask();
   // P2-1：默认筛选按角色
   const roleCfg = getRoleConfig(currentRole);
   const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'assigned' | 'participated' | 'phase-qa'>(roleCfg.defaultTaskFilter);
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState<'priority' | 'time'>('priority');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  // P4-2：看板拖拽（改阶段）
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const [dragOverPhase, setDragOverPhase] = useState<string | null>(null);
 
   const phases = ['需求评审', '产品设计', '开发实现'] as const;
+
+  // P4-2：拖放到目标阶段组 → 真实更新任务阶段
+  const handleDrop = async (phase: string) => {
+    const taskId = dragTaskId;
+    setDragTaskId(null);
+    setDragOverPhase(null);
+    if (!taskId) return;
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.phase === phase) return;
+    try {
+      await updateTask.mutateAsync({ id: taskId, phase: phase as typeof task.phase });
+      show(`「${task.title}」已移至${phase}`);
+    } catch (err) {
+      show(apiError(err, '移动失败'));
+    }
+  };
 
   const filteredTasks = tasks.filter((t) => {
     if (statusFilter !== 'all' && t.status !== statusFilter) return false;
@@ -40,6 +63,7 @@ export const TaskGroupList: React.FC = () => {
 
   return (
     <div className="w-full h-full min-h-0 flex flex-col gap-2.5 select-none">
+      {ToastEl}
       {/* 筛选工具条：永远单行，不换行 */}
       <div className="flex items-center gap-2 flex-nowrap min-w-0 overflow-x-auto pb-0.5 shrink-0">
         <div className="liquid-pill p-1 flex items-center gap-0.5 relative shrink-0 whitespace-nowrap">
@@ -101,6 +125,9 @@ export const TaskGroupList: React.FC = () => {
         {phases.map((phase, pi) => {
           const groupTasks = filteredTasks.filter((t) => t.phase === phase);
           const isCollapsed = collapsedGroups[phase];
+          // P4-2：阶段工时小计（真实预估工时汇总）
+          const groupHours = groupTasks.reduce((s, t) => s + (t.estimatedHours ?? 0), 0);
+          const isDragOver = dragOverPhase === phase;
           const colors = {
             需求评审: { dot: 'bg-emerald-400', badge: 'text-emerald-300 bg-emerald-400/10 border-emerald-400/25' },
             产品设计: { dot: 'bg-sky-400', badge: 'text-sky-300 bg-sky-400/10 border-sky-400/25' },
@@ -113,7 +140,17 @@ export const TaskGroupList: React.FC = () => {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.05 * pi, ...springSoft }}
-              className="liquid-glass overflow-hidden !rounded-[18px]"
+              onDragOver={(e) => {
+                if (!dragTaskId) return;
+                e.preventDefault();
+                setDragOverPhase(phase);
+              }}
+              onDragLeave={() => setDragOverPhase((p) => (p === phase ? null : p))}
+              onDrop={() => handleDrop(phase)}
+              className={clsx(
+                'liquid-glass overflow-hidden !rounded-[18px] transition-colors',
+                isDragOver && 'ring-2 ring-emerald-400/60 bg-emerald-400/[0.06]'
+              )}
             >
               <button
                 onClick={() => setCollapsedGroups((p) => ({ ...p, [phase]: !p[phase] }))}
@@ -123,6 +160,11 @@ export const TaskGroupList: React.FC = () => {
                   <span className={`w-1.5 h-1.5 rounded-full ${colors.dot} shadow-[0_0_8px_currentColor]`} />
                   <span className="text-[13px] font-bold text-white">{phase}</span>
                   <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono border ${colors.badge}`}>{groupTasks.length}</span>
+                  {groupHours > 0 && (
+                    <span className="flex items-center gap-0.5 text-[10px] font-mono text-white/35" title="预估工时小计">
+                      <Clock className="w-2.5 h-2.5" />{groupHours}h
+                    </span>
+                  )}
                 </span>
                 <motion.span animate={{ rotate: isCollapsed ? -90 : 0 }} transition={{ duration: 0.2 }}>
                   <ChevronDown className="w-3.5 h-3.5 text-white/35" />
@@ -152,10 +194,22 @@ export const TaskGroupList: React.FC = () => {
                             initial="hidden"
                             animate="show"
                             whileHover={{ x: 2 }}
+                            draggable
+                            onDragStart={(e) => {
+                              const dt = (e as unknown as React.DragEvent<HTMLButtonElement>).dataTransfer;
+                              setDragTaskId(task.id);
+                              dt?.setData('text/plain', task.id);
+                              if (dt) dt.effectAllowed = 'move';
+                            }}
+                            onDragEnd={() => {
+                              setDragTaskId(null);
+                              setDragOverPhase(null);
+                            }}
                             onClick={() => setSelectedTask(task)}
                             className={clsx(
                               'w-full px-3 py-2.5 flex items-center justify-between gap-2 text-left transition-colors duration-200 relative',
-                              selected ? 'bg-emerald-400/[0.08]' : 'hover:bg-white/[0.03]'
+                              selected ? 'bg-emerald-400/[0.08]' : 'hover:bg-white/[0.03]',
+                              dragTaskId === task.id && 'opacity-40'
                             )}
                           >
                             {selected && (
@@ -171,6 +225,9 @@ export const TaskGroupList: React.FC = () => {
                               </span>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
+                              {task.estimatedHours ? (
+                                <span className="text-[10px] font-mono text-white/25 hidden sm:inline">{task.estimatedHours}h</span>
+                              ) : null}
                               <StatusBadge type="priority" value={task.priority} />
                               {task.deadline && (
                                 <span className="text-[10px] font-mono text-white/30 hidden sm:inline">

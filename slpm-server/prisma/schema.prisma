@@ -61,6 +61,10 @@ model UserSettings {
   accentColor    String  @default("emerald") // emerald | cyan | purple
   glassBlur      String  @default("ultra") // standard | ultra | max
   enableConfetti Boolean @default(true)
+  // P4-2：通知偏好（后端 notify.ts 按收件人设置过滤）
+  notifyMention  Boolean @default(true) // @ 提及
+  notifyAssign   Boolean @default(true) // 任务指派
+  notifyDeadline Boolean @default(true) // 截止提醒（预留）
   updatedAt      DateTime @updatedAt
 }
 
@@ -98,6 +102,9 @@ model Task {
   // P3：所属产品版本（可选，任务可不关联任何版本）
   productVersionId String?
   productVersion   ProductVersion? @relation(fields: [productVersionId], references: [id], onDelete: SetNull)
+
+  // P4-2：预估工时（小时，燃尽图/负荷统计用）
+  estimatedHours Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

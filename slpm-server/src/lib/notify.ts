@@ -53,10 +53,14 @@ export async function notifyMentions(
   );
   if (recipientIds.length === 0) return;
 
+  // P4-2：按收件人通知偏好过滤（关闭 @提及 的成员不打扰）
+  const enabledIds = await filterBySetting(recipientIds, 'notifyMention');
+  if (enabledIds.length === 0) return;
+
   const title = `${actor?.name ?? '有人'} 在任务中提到了你`;
   await prisma.notification
     .createMany({
-      data: recipientIds.map((userId) => ({
+      data: enabledIds.map((userId) => ({
         userId,
         workspaceId,
         type: 'mention',
@@ -68,7 +72,7 @@ export async function notifyMentions(
     .catch((e) => console.error('[notifyMentions] 写通知失败:', e));
 
   // P1-6：WS 实时推送（online 收，offline 下次页面拉取）
-  for (const userId of recipientIds) {
+  for (const userId of enabledIds) {
     emitToUser(userId, 'notification', { type: 'mention', taskId, snippet: snippet.slice(0, 200) });
   }
 }
@@ -105,6 +109,10 @@ export async function notifyAssignment(
 
   if (!SELF_FILTER(actorId, newAssignee)) return;
 
+  // P4-2：收件人关闭了「任务指派」通知则跳过
+  const enabled = await filterBySetting([newAssignee], 'notifyAssign');
+  if (enabled.length === 0) return;
+
   await prisma.notification
     .create({
       data: {
@@ -120,4 +128,22 @@ export async function notifyAssignment(
 
   // P1-6：WS 实时推送
   emitToUser(newAssignee, 'notification', { type: 'assign', taskId, title: task?.title ?? '' });
+}
+
+/**
+ * P4-2：按收件人的 UserSettings 过滤通知类型。
+ * 记录缺失视为开启（默认值），静默失败不影响主流程。
+ */
+async function filterBySetting(userIds: string[], field: 'notifyMention' | 'notifyAssign' | 'notifyDeadline'): Promise<string[]> {
+  try {
+    const settings = await prisma.userSettings.findMany({
+      where: { userId: { in: userIds } },
+      select: { userId: true, notifyMention: true, notifyAssign: true, notifyDeadline: true },
+    });
+    const disabled = new Set(settings.filter((s) => s[field] === false).map((s) => s.userId));
+    return userIds.filter((uid) => !disabled.has(uid));
+  } catch (e) {
+    console.error('[filterBySetting] 查询失败，按全部开启处理:', e);
+    return userIds;
+  }
 }

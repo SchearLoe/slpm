@@ -102,12 +102,20 @@ export function useSchedules(month: string) {
   });
 }
 
+// 日程冲突条目（P4-2：与既有日程时间重叠）
+export interface ScheduleConflict {
+  id: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+}
+
 export function useCreateSchedule() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: Omit<ScheduleEvent, 'id' | 'ownerId' | 'createdAt'>) => {
-      const res = await api.post<{ schedule: ScheduleEvent }>('/schedules', input);
-      return res.data.schedule;
+      const res = await api.post<{ schedule: ScheduleEvent; conflicts?: ScheduleConflict[] }>('/schedules', input);
+      return res.data; // { schedule, conflicts }
     },
     onSuccess: () => {
       // 刷新所有月份缓存（日程可能跨月）
@@ -120,8 +128,8 @@ export function useUpdateSchedule() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Partial<ScheduleEvent>) => {
-      const res = await api.put<{ schedule: ScheduleEvent }>(`/schedules/${id}`, updates);
-      return res.data.schedule;
+      const res = await api.put<{ schedule: ScheduleEvent; conflicts?: ScheduleConflict[] }>(`/schedules/${id}`, updates);
+      return res.data; // { schedule, conflicts }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedules'] });

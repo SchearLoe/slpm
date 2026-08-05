@@ -7,6 +7,35 @@ import { ApiError } from '../middleware/error.js';
 
 const router = Router();
 
+// P4-2：日程冲突检测。
+// 规则：同工作区内，时间区间相交，且「主办方是我」或「参会人（按姓名）与我方参会人有交集」的已有日程。
+async function findConflicts(
+  workspaceId: string,
+  ownerId: string,
+  startTime: Date,
+  endTime: Date,
+  attendees: string[],
+  excludeId?: string,
+) {
+  const overlapping = await prisma.scheduleEvent.findMany({
+    where: {
+      workspaceId,
+      id: excludeId ? { not: excludeId } : undefined,
+      AND: [
+        { startTime: { lt: endTime } },
+        { endTime: { gt: startTime } },
+      ],
+    },
+    select: { id: true, title: true, startTime: true, endTime: true, ownerId: true, attendees: true },
+  });
+  return overlapping.filter((s) => {
+    // 主办方冲突：我的日程互相重叠
+    if (s.ownerId === ownerId) return true;
+    // 参会人冲突：参会人有交集（姓名匹配）
+    return s.attendees.some((a) => attendees.includes(a));
+  });
+}
+
 // ---- GET /api/schedules?month=YYYY-MM ----
 // 按月拉取日程（修复原 demo "只能 5 月" 的问题，支持任意月份）
 router.get(
@@ -75,7 +104,17 @@ router.post(
         workspaceId: req.workspace!.id, // P1-2：归属当前工作区
       },
     });
-    res.status(201).json({ schedule });
+
+    // P4-2：冲突预警（同主办/同参会人时间重叠，排除自身）
+    const conflicts = await findConflicts(
+      req.workspace!.id,
+      req.user!.sub,
+      schedule.startTime,
+      schedule.endTime,
+      schedule.attendees,
+      schedule.id,
+    );
+    res.status(201).json({ schedule, conflicts });
   }),
 );
 
@@ -102,7 +141,17 @@ router.put(
       where: { id: req.params.id, workspaceId: req.workspace!.id }, // P1-2：工作区内日程
       data,
     });
-    res.json({ schedule });
+
+    // P4-2：冲突预警（编辑后重新检测，排除自身）
+    const conflicts = await findConflicts(
+      req.workspace!.id,
+      req.user!.sub,
+      schedule.startTime,
+      schedule.endTime,
+      schedule.attendees,
+      schedule.id,
+    );
+    res.json({ schedule, conflicts });
   }),
 );
 

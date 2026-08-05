@@ -21,6 +21,10 @@ export interface UserSettings {
   accentColor: 'emerald' | 'cyan' | 'purple';
   glassBlur: 'standard' | 'ultra' | 'max';
   enableConfetti: boolean;
+  // P4-2：通知偏好（后端 notify.ts 按此过滤）
+  notifyMention: boolean;
+  notifyAssign: boolean;
+  notifyDeadline: boolean;
 }
 
 export interface User {
@@ -85,6 +89,8 @@ export interface TaskItem {
   // P3：所属产品版本
   productVersionId?: string | null;
   productVersion?: { id: string; name: string; status: string } | null;
+  // P4-2：预估工时（小时）
+  estimatedHours?: number | null;
   project: string; // 旧 demo 字段，后端暂不持久化
   deadline: string; // 后端 ISO；旧 demo "2025-05-24 18:00"
   description: string;

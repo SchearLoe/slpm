@@ -25,6 +25,7 @@ export const EditTaskModal: React.FC = () => {
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   const [versionId, setVersionId] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export const EditTaskModal: React.FC = () => {
     setDescription(editingTask.description);
     setTagsInput(editingTask.tags.join(', '));
     setVersionId(editingTask.productVersionId ?? '');
+    setEstimatedHours(editingTask.estimatedHours != null ? String(editingTask.estimatedHours) : '');
     setError('');
   }, [editingTask]);
 
@@ -62,6 +64,8 @@ export const EditTaskModal: React.FC = () => {
         tags: tagsInput.split(/[,，]/).map((t) => t.trim()).filter(Boolean),
         // P3：产品版本（可选）
         ...(versions.length > 0 ? { productVersionId: versionId || null } : {}),
+        // P4-2：预估工时（可选；空串 → 清空）
+        estimatedHours: estimatedHours.trim() ? Math.max(0, Number(estimatedHours)) : null,
       });
       setSelectedTask(task); // 同步右侧详情
       setEditingTask(null);
@@ -200,6 +204,19 @@ export const EditTaskModal: React.FC = () => {
         <div>
           <label className="block text-[11px] text-white/40 mb-1.5">标签</label>
           <input className={field} value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} />
+        </div>
+        {/* P4-2：预估工时 */}
+        <div>
+          <label className="block text-[11px] text-white/40 mb-1.5">预估工时（小时）</label>
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={estimatedHours}
+            onChange={(e) => setEstimatedHours(e.target.value)}
+            placeholder="留空表示未估算"
+            className={field}
+          />
         </div>
         {error && (
           <div className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-400/25 rounded-lg px-3 py-2">

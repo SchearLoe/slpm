@@ -32,6 +32,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('评审, 需求, 关键路径');
   const [versionId, setVersionId] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('');
   const [error, setError] = useState('');
 
   // 截止时间：默认 7 天后，转 ISO（datetime-local 输入）
@@ -62,6 +63,10 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
     if (versions.length > 0) {
       payload.productVersionId = versionId || null;
     }
+    // P4-2：预估工时（可选）
+    if (estimatedHours.trim()) {
+      payload.estimatedHours = Math.max(0, Number(estimatedHours));
+    }
 
     try {
       const task = await createTask.mutateAsync(payload);
@@ -72,6 +77,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
       setTitle('');
       setDescription('');
       setVersionId('');
+      setEstimatedHours('');
       onCreated?.(task);
       onClose();
     } catch (err) {
@@ -171,6 +177,20 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
             className={`${field} [color-scheme:dark]`}
             value={deadlineInput}
             onChange={(e) => setDeadlineInput(e.target.value)}
+          />
+        </div>
+
+        {/* P4-2：预估工时 */}
+        <div>
+          <label className="block text-[11px] text-white/40 mb-1.5">预估工时（小时，用于燃尽图与负荷统计）</label>
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={estimatedHours}
+            onChange={(e) => setEstimatedHours(e.target.value)}
+            placeholder="如 8"
+            className={field}
           />
         </div>
 
