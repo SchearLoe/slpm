@@ -33,6 +33,41 @@ function maskConfig(cfg: { aiBaseUrl: string; aiModel: string; aiTemperature: nu
   };
 }
 
+/**
+ * P7 安全修复：校验 AI baseURL，防 SSRF。
+ * 强制 http/https 协议；拒绝私网/保留段（127.0.0.0/8、10/8、172.16/12、192.168/16、169.254/16、::1）。
+ * 注意：只做静态 URL 解析，DNS 解析后的二次校验（防 rebinding）留给生产网关。
+ */
+function validateAiBaseUrl(raw: string): { ok: boolean; error?: string } {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return { ok: false, error: 'AI baseURL 不是合法 URL' };
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return { ok: false, error: 'AI baseURL 必须是 http 或 https 协议' };
+  }
+  const host = u.hostname.toLowerCase();
+  // 拒绝 IP 字面量形式的私网/保留段
+  const ipMatch = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (ipMatch) {
+    const [a, b] = [Number(ipMatch[1]), Number(ipMatch[2])];
+    const isPrivate =
+      a === 10 ||
+      a === 127 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254) ||
+      (a === 0);
+    if (isPrivate) return { ok: false, error: 'AI baseURL 不能指向内网/保留地址' };
+  }
+  if (host === 'localhost' || host === '::1' || host.endsWith('.localhost')) {
+    return { ok: false, error: 'AI baseURL 不能指向本地地址' };
+  }
+  return { ok: true };
+}
+
 // ============ 配置读写（仅 system_admin） ============
 
 // GET /api/ai/config —— 取配置（key 脱敏）
@@ -47,6 +82,7 @@ router.get(
 );
 
 // PUT /api/ai/config —— 更新配置（apiKey 可选，空则保留旧值）
+// P7 安全修复：aiBaseUrl 强制 http/https 协议 + 拒绝私网/保留段（防 SSRF）
 const configSchema = z.object({
   aiBaseUrl: z.string().max(500).optional(),
   aiModel: z.string().max(100).optional(),
@@ -61,6 +97,12 @@ router.put(
     const parsed = configSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
     const d = parsed.data;
+
+    // P7：校验 aiBaseUrl 不是内网/保留地址（防 SSRF 探测元数据服务等）
+    if (d.aiBaseUrl !== undefined && d.aiBaseUrl !== '') {
+      const validation = validateAiBaseUrl(d.aiBaseUrl);
+      if (!validation.ok) throw new ApiError(400, validation.error ?? 'AI baseURL 格式不合法');
+    }
 
     const existing = await getConfig(true); // 不存在则建空默认
 
@@ -333,8 +375,10 @@ async function callChatCompletion(
     signal: AbortSignal.timeout(30000), // 30s 超时
   });
   if (!resp.ok) {
+    // P7 安全修复：上游错误细节仅写服务端日志，不透传给客户端（防泄露 URL/密钥信息）
     const errText = await resp.text().catch(() => '');
-    throw new ApiError(502, `上游返回 ${resp.status}: ${errText.slice(0, 200)}`);
+    console.warn(`[ai] 上游返回 ${resp.status}: ${errText.slice(0, 300)}`);
+    throw new ApiError(502, 'AI 上游服务暂不可用，请稍后重试或检查配置');
   }
   const data = (await resp.json()) as {
     choices?: { message?: { content?: string } }[];
@@ -374,8 +418,10 @@ async function callChatCompletionStream(
     signal: opts.signal ?? AbortSignal.timeout(60000), // 流式放宽到 60s
   });
   if (!resp.ok) {
+    // P7 安全修复：上游错误细节仅写服务端日志
     const errText = await resp.text().catch(() => '');
-    throw new ApiError(502, `上游返回 ${resp.status}: ${errText.slice(0, 200)}`);
+    console.warn(`[ai/stream] 上游返回 ${resp.status}: ${errText.slice(0, 300)}`);
+    throw new ApiError(502, 'AI 上游服务暂不可用，请稍后重试或检查配置');
   }
   if (!resp.body) throw new ApiError(502, '上游未返回流');
 

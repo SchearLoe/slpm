@@ -418,6 +418,11 @@ router.patch(
       })
       .safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
+    // P7 安全修复：校验 task 归属当前工作区（防跨工作区 IDOR）
+    await prisma.task.findFirstOrThrow({
+      where: { id: req.params.taskId, workspaceId: req.workspace!.id },
+      select: { id: true },
+    });
     const item = await prisma.taskChecklistItem.update({
       where: { id: req.params.itemId, taskId: req.params.taskId },
       data: parsed.data,
@@ -432,6 +437,11 @@ router.delete(
   requireAuth,
   requireWorkspace,
   asyncHandler(async (req, res) => {
+    // P7 安全修复：校验 task 归属当前工作区（防跨工作区 IDOR）
+    await prisma.task.findFirstOrThrow({
+      where: { id: req.params.taskId, workspaceId: req.workspace!.id },
+      select: { id: true },
+    });
     await prisma.taskChecklistItem.delete({
       where: { id: req.params.itemId, taskId: req.params.taskId },
     });

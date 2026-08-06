@@ -74,14 +74,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const [savingProfile, setSavingProfile] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   // profile 从当前登录用户初始化（替代原硬编码 Brandon）
-  const [profile, setProfile] = useState({ name: user?.name || '', role: user?.role || '成员', email: user?.email || '' });
+  // P7 安全修复：职位展示字段改用 jobTitle（与权限 role 物理分离，防提权）
+  const [profile, setProfile] = useState({ name: user?.name || '', role: user?.jobTitle || '', email: user?.email || '' });
 
   // P4-1：真实保存个人资料（PATCH /auth/me）
   const saveProfile = async () => {
     if (savingProfile) return;
     setSavingProfile(true);
     try {
-      await api.patch('/auth/me', { name: profile.name.trim(), role: profile.role.trim() });
+      await api.patch('/auth/me', { name: profile.name.trim(), jobTitle: profile.role.trim() });
       await refreshUser();
       setProfileOpen(false);
       show('资料已保存');
@@ -116,7 +117,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
 
   // user 变化时（登录后）同步 profile
   React.useEffect(() => {
-    if (user) setProfile({ name: user.name, role: user.role, email: user.email });
+    if (user) setProfile({ name: user.name, role: user.jobTitle ?? '', email: user.email });
   }, [user]);
 
   // P1-2：新建工作区 —— 调真实 API

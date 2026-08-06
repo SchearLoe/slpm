@@ -4,6 +4,7 @@ import { Server as SocketServer } from 'socket.io';
 import cors from 'cors';
 import fs from 'node:fs';
 import { env } from './config/env.js';
+import { prisma } from './lib/prisma.js';
 import authRoutes from './routes/auth.routes.js';
 import taskRoutes from './routes/task.routes.js';
 import scheduleRoutes from './routes/schedule.routes.js';
@@ -25,6 +26,12 @@ import { apiLimiter } from './middleware/rateLimit.js';
 
 const app = express();
 
+// P7 安全修复：trust proxy 配置（部署在 nginx/CDN/负载均衡后必须开启，
+// 否则 req.ip 永远是反代 IP，导致 express-rate-limit 全站共享配额失效、审计 IP 失真）
+if (env.trustProxy) {
+  app.set('trust proxy', 1);
+}
+
 // P1-3：启动时确保上传根目录存在
 fs.mkdirSync(env.uploadDir, { recursive: true });
 
@@ -35,13 +42,20 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json());
+// P7 安全修复：限制请求体大小，防超大 JSON DoS
+app.use(express.json({ limit: '2mb' }));
 // P5-1：通用 API 速率限制（认证类路由在各自 router 内加更严格限制）
 app.use('/api/', apiLimiter);
 
-// 健康检查（无需认证，供前端探活）
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'slpm-server', time: new Date().toISOString() });
+// 健康检查（无需认证，供前端探活/容器健康检查）
+// P5-2：探活数据库连接（真实 liveness，而非仅进程存活）
+app.get('/api/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ ok: true, service: 'slpm-server', db: 'ok', time: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ ok: false, service: 'slpm-server', db: 'unavailable', time: new Date().toISOString() });
+  }
 });
 
 // ---- 路由 ----
@@ -87,5 +101,30 @@ async function bootstrap() {
     console.log(`   环境: ${env.nodeEnv} · 前端: ${env.clientOrigin} · WebSocket ✓`);
   });
 }
+
+// P5-2：优雅关闭（SIGTERM/SIGINT → 停止接受新连接 → 等 in-flight 完成 → 断开 Prisma）
+function gracefulShutdown(signal: string) {
+  console.log(`\n📤 收到 ${signal}，正在优雅关闭…`);
+  server.close(async () => {
+    console.log('   HTTP 服务已停止');
+    try {
+      await prisma.$disconnect();
+      console.log('   数据库连接已断开');
+    } catch {
+      console.error('   数据库断开失败（忽略）');
+    }
+    process.exit(0);
+  });
+  // 5 秒后强制退出（防卡死）
+  setTimeout(() => {
+    console.error('⚠️ 5 秒内未能完成优雅关闭，强制退出');
+    process.exit(1);
+  }, 5000);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ 未处理的 Promise rejection:', reason);
+});
 
 bootstrap();

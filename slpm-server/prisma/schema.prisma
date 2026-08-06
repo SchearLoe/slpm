@@ -19,7 +19,8 @@ model User {
   passwordHash String
   name         String
   avatar       String?  // 首字母自动生成（如 BR），第二期支持真实头像
-  role         String   @default("成员") // 个人版固定，团队版用：管理员/成员/只读
+  role         String   @default("成员") // 权限标识：system_admin | 成员（P7 安全修复：仅受信路径可写，禁止用户自改）
+  jobTitle     String?  // 职位展示字段（如 "前端工程师"，用户可自行修改；与权限 role 物理分离）
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -54,6 +55,8 @@ model User {
   ownedProducts Product[] @relation("ProductOwner")
   // P6-C：审计日志（作为操作者）
   auditLogs AuditLog[] @relation("AuditLogActor")
+  // P7-C：关注的任务
+  watchingTasks TaskWatcher[] @relation("TaskWatcherUser")
 }
 
 model UserSettings {
@@ -107,6 +110,10 @@ model Task {
 
   // P4-2：预估工时（小时，燃尽图/负荷统计用）
   estimatedHours Float?
+  // P7-A：实际已记录工时（小时，估时偏差分析用）
+  spentHours Float @default(0)
+  // P7-B：归档标记（true 则从默认列表/看板隐藏，仍可通过筛选访问）
+  archived Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -116,6 +123,7 @@ model Task {
   @@index([status])
   @@index([phase])
   @@index([workspaceId])
+  @@index([archived])
 
   // P1-1：反向关系（任务删除时级联清理评论/活动）
   comments   TaskComment[]
@@ -126,6 +134,8 @@ model Task {
   blocks     TaskDependency[] @relation("Blocks")
   // P6-B：任务清单子项（Checklist）
   checklist TaskChecklistItem[]
+  // P7-C：任务关注者（Watcher，订阅状态变更通知）
+  watchers TaskWatcher[]
 }
 
 // ============ 任务清单子项（P6-B Checklist） ============
@@ -142,6 +152,21 @@ model TaskChecklistItem {
   updatedAt DateTime @updatedAt
 
   @@index([taskId])
+}
+
+// ============ 任务关注者（P7-C Watcher） ============
+// 用户主动订阅某任务，接收状态变更/评论/指派等通知（区别于 assignee 的被动指派）。
+
+model TaskWatcher {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("TaskWatcherUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, userId]) // 一个用户对一个任务只关注一次
+  @@index([userId])
 }
 
 // ============ 任务评论（P1-1） ============

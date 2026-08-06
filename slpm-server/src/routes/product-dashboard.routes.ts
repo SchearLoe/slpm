@@ -6,6 +6,7 @@ import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { requireProductAccess, requireProductRole } from '../middleware/product.js';
 import { ApiError } from '../middleware/error.js';
 import { notifyAssignment } from '../lib/notify.js';
+import { ROLE_RANK } from '../lib/constants.js';
 
 const router = Router();
 
@@ -181,7 +182,6 @@ router.get(
       byUser.set(m.userId, entry);
     }
 
-    const ROLE_RANK: Record<string, number> = { po: 4, admin: 3, pm: 2, dev: 1, qa: 1 };
     const members = [...byUser.values()].map(({ user, roles, workspaces }) => {
       const counts = agg.get(user.id) ?? { total: 0, inProgress: 0, completed: 0, overdue: 0 };
       return {

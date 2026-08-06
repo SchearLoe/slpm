@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { requireProductAccess, requireProductRole } from '../middleware/product.js';
 import { ApiError } from '../middleware/error.js';
+import { ROLE_RANK } from '../lib/constants.js';
 
 const router = Router();
 
@@ -12,9 +13,6 @@ function makeSlug(name: string): string {
   const base = name.trim().toLowerCase().replace(/[^\w\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '');
   return base || `prod_${Date.now()}`;
 }
-
-// 用户在产品线下的最高角色（用于前端按钮权限）
-const ROLE_RANK: Record<string, number> = { po: 4, admin: 3, pm: 2, dev: 1, qa: 1 };
 
 /**
  * P3：产品线 CRUD。

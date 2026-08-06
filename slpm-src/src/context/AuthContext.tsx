@@ -39,9 +39,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // P1-6：WebSocket 生命周期（登录连接，登出断开，收到通知刷新缓存）
+  // P5-2：依赖 user?.id 而非 user 对象，避免 refreshUser 时 setUser 触发不必要的重连
+  const userId = user?.id;
   useEffect(() => {
     const token = tokenStore.get();
-    if (!token || !user) return;
+    if (!token || !userId) return;
     connectSocket(token);
     const off = onNotification(() => {
       qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
@@ -51,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       off();
       disconnectSocket();
     };
-  }, [user, qc]);
+  }, [userId, qc]);
 
   const login = async (email: string, password: string) => {
     const res = await api.post<{ token: string; user: User }>('/auth/login', { email, password });

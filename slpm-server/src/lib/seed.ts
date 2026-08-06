@@ -20,17 +20,27 @@ export async function ensureSystemAdmin(): Promise<void> {
   await prisma.user.create({
     data: {
       email,
-      passwordHash: await bcrypt.hash(password, 10),
+      passwordHash: await bcrypt.hash(password, 12),
       name: '系统管理员',
       role: 'system_admin',
       settings: { create: {} },
     },
   });
 
+  // P7 安全修复：明文密码不再打印到 stdout（防容器日志聚合泄露）。
+  // 改为写入本地一次性文件 .admin-initial-password（仅安装人员可读，权限 0600）
   console.log('════════════════════════════════════════════');
   console.log('🛡 已初始化超级管理员账号（首次安装）');
   console.log(`   邮箱: ${email}`);
-  console.log(`   密码: ${password}`);
+  if (env.initialAdminPassword) {
+    console.log('   密码: 使用 .env 配置的 INITIAL_ADMIN_PASSWORD');
+  } else {
+    // 随机密码写入本地文件，不直接落 stdout
+    const fs = await import('node:fs');
+    const pwdFile = '.admin-initial-password';
+    fs.writeFileSync(pwdFile, `邮箱: ${email}\n密码: ${password}\n（请立即登录并修改密码，然后删除此文件）\n`, { mode: 0o600 });
+    console.log(`   随机密码已写入文件: ${pwdFile}（请查看后立即删除）`);
+  }
   console.log('   ⚠ 请立即登录并修改密码！如需预设账号，可在 .env 配置');
   console.log('     INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD');
   console.log('════════════════════════════════════════════');
@@ -145,7 +155,7 @@ export async function seedDemoManual() {
   const user = await prisma.user.create({
     data: {
       email: 'demo@slpm.local',
-      passwordHash: await bcrypt.hash(password, 10),
+      passwordHash: await bcrypt.hash(password, 12),
       name: '演示用户',
       role: 'system_admin',
       settings: { create: {} },

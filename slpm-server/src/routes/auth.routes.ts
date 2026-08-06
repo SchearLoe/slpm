@@ -57,6 +57,7 @@ function publicUser(u: {
   name: string;
   avatar: string | null;
   role: string;
+  jobTitle?: string | null;
   settings?: {
     accentColor: string;
     glassBlur: string;
@@ -76,6 +77,7 @@ function publicUser(u: {
     name: u.name,
     avatar: u.avatar ?? avatarFromName(u.name),
     role: u.role,
+    jobTitle: u.jobTitle ?? null,
     settings: s
       ? {
           accentColor: s.accentColor as 'emerald' | 'cyan' | 'purple',
@@ -97,7 +99,8 @@ function publicUser(u: {
 // ---- POST /api/auth/register ----
 const registerSchema = z.object({
   email: z.string().email('邮箱格式不正确'),
-  password: z.string().min(6, '密码至少 6 位'),
+  // P5-2：密码 ≥8 位 + 必须含字母和数字
+  password: z.string().min(8, '密码至少 8 位').regex(/[a-zA-Z]/, '密码须含字母').regex(/[0-9]/, '密码须含数字'),
   name: z.string().min(1, '请填写姓名').max(40),
 });
 
@@ -114,7 +117,7 @@ router.post(
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) throw new ApiError(409, '该邮箱已注册');
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
 
     // P1-4：第一个注册的用户自动成为系统管理员（可配置 AI 等）
     const userCount = await prisma.user.count();
@@ -222,8 +225,12 @@ router.get(
 
 // ---- PATCH /api/auth/me ----
 // 更新个人资料（显示名称 / 职位展示字段）
+// P7 安全修复：禁止用户修改 User.role（权限标识），仅允许改 name 和 jobTitle（职位展示）。
+// 历史漏洞：旧实现透传 role 字段，用户可自行提权为 system_admin。
 const updateProfileSchema = z.object({
   name: z.string().min(1, '姓名必填').max(40).optional(),
+  jobTitle: z.string().max(40).optional(),
+  // 兼容前端旧字段名 "role"：映射到 jobTitle（而非权限 role）
   role: z.string().max(40).optional(),
 });
 router.patch(
@@ -233,9 +240,11 @@ router.patch(
     const parsed = updateProfileSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
 
-    const data: Record<string, string> = {};
+    const data: { name?: string; jobTitle?: string } = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
-    if (parsed.data.role !== undefined) data.role = parsed.data.role;
+    // 前端 "role" 字段在语义上是"职位"（如"前端工程师"），写入 jobTitle 而非权限 User.role
+    const titleVal = parsed.data.jobTitle ?? parsed.data.role;
+    if (titleVal !== undefined) data.jobTitle = titleVal;
 
     const user = await prisma.user.update({
       where: { id: req.user!.sub },
@@ -308,10 +317,13 @@ router.post(
     }
 
     const token = signToken({ sub: user.id, email: user.email, purpose: 'reset' }, '15m');
-    const devResetUrl = env.nodeEnv === 'development'
+    // P7 安全修复：devResetUrl 改为显式 env 开关（ENABLE_DEV_RESET_LINK），与 NODE_ENV 解耦
+    // 避免生产环境误配 NODE_ENV=development 导致重置链接泄露
+    const devResetUrl = env.enableDevResetLink
       ? `${env.clientOrigin}/reset-password?token=${token}`
       : null;
-    console.log(`🔑 [forgot-password] ${parsed.data.email}${devResetUrl ? ` → 重置链接: ${devResetUrl}` : '（生产环境请接入邮件服务）'}`);
+    // 仅记录邮箱与事件，不把含 token 的完整链接写入日志（防日志泄露导致账号接管）
+    console.log(`🔑 [forgot-password] 已为 ${parsed.data.email} 生成重置请求${env.enableDevResetLink ? '（开发模式已返回链接）' : '（生产环境请接入邮件服务）'}`);
     res.json({ ok: true, devResetUrl });
   }),
 );
@@ -319,7 +331,7 @@ router.post(
 // ---- POST /api/auth/reset-password ----
 const resetSchema = z.object({
   token: z.string().min(1, '缺少重置凭证'),
-  newPassword: z.string().min(6, '新密码至少 6 位'),
+  newPassword: z.string().min(8, '新密码至少 8 位').regex(/[a-zA-Z]/, '密码须含字母').regex(/[0-9]/, '密码须含数字'),
 });
 router.post(
   '/reset-password',
@@ -338,7 +350,8 @@ router.post(
       throw new ApiError(400, '重置链接无效或已过期，请重新申请');
     }
 
-    const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+    // P7 安全修复：bcrypt rounds 提升到 12（原 10 偏低）
+    const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
     await prisma.user.update({
       where: { id: payload.sub },
       data: { passwordHash },

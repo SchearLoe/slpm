@@ -21,8 +21,8 @@ export const ResetPasswordPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (password.length < 6) {
-      setError('密码至少 6 位');
+    if (password.length < 8) {
+      setError("密码至少 8 位，含字母和数字");
       return;
     }
     if (password !== confirm) {
@@ -93,8 +93,8 @@ export const ResetPasswordPage: React.FC = () => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="新密码（至少 6 位）"
-                minLength={6}
+                placeholder="新密码（至少 8 位，含字母和数字）"
+                minLength={8}
                 className={field}
               />
             </div>
@@ -106,7 +106,7 @@ export const ResetPasswordPage: React.FC = () => {
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 placeholder="确认新密码"
-                minLength={6}
+                minLength={8}
                 className={field}
               />
             </div>

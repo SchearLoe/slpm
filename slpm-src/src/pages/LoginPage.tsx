@@ -33,7 +33,7 @@ export const LoginPage: React.FC = () => {
         if (res.data.devResetUrl) {
           setForgotResult(`重置链接已生成（开发模式）：${res.data.devResetUrl}`);
         } else {
-          setForgotResult('如果该邮箱已注册，重置指引将发送到你的邮箱（当前环境未接入邮件服务，请查看服务端控制台）。');
+          setForgotResult('如果该邮箱已注册，重置指引已生成。开发环境请查看服务端控制台；生产环境请联系管理员重置密码。');
         }
         return;
       }
@@ -161,8 +161,8 @@ export const LoginPage: React.FC = () => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="密码（至少 6 位）"
-                minLength={6}
+                placeholder="密码（至少 8 位，含字母和数字）"
+                minLength={8}
                 className={field}
               />
             </div>

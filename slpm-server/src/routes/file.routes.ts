@@ -11,6 +11,19 @@ import { ApiError } from '../middleware/error.js';
 import { env } from '../config/env.js';
 import { FILE_UPLOAD, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE } from '../lib/constants.js';
 
+/**
+ * P7 安全修复：清洗客户端上传的文件名。
+ * 去除路径分隔符、控制字符、空字节；限长 200；防 Content-Disposition 头注入与异常下载名。
+ */
+function sanitizeFileName(name: string): string {
+  return name
+    .replace(/[/\\]/g, '_') // 路径分隔符 → 下划线（防穿越，虽然落盘用 uuid，但下载名仍需干净）
+    .replace(/[\x00-\x1f\x7f]/g, '') // 控制字符 + DEL
+    .replace(/\r|\n/g, '') // CRLF（防响应头注入）
+    .trim()
+    .slice(0, 200) || 'untitled';
+}
+
 const router = Router();
 
 /**
@@ -102,13 +115,15 @@ router.post(
 
     // storagePath 存相对路径（uploads/<wsId>/<uuid>.ext），便于迁移/备份
     const storagePath = path.join(req.workspace!.id, file.filename);
+    // P7 安全修复：清洗原始文件名（去路径分隔符/控制字符/CRLF，防响应头注入）
+    const originalName = sanitizeFileName(file.originalname);
 
     // P1-6：同名文件自动归档旧版本
     const existing = await prisma.fileRecord.findFirst({
       where: {
         workspaceId: req.workspace!.id,
         uploaderId: req.user!.sub,
-        originalName: file.originalname,
+        originalName,
       },
     });
 
@@ -128,8 +143,8 @@ router.post(
       record = await prisma.fileRecord.update({
         where: { id: existing.id },
         data: {
-          title: title !== file.originalname ? title : existing.title, // 保留非默认标题
-          originalName: file.originalname,
+          title: title !== originalName ? title : existing.title, // 保留非默认标题
+          originalName,
           mimeType: file.mimetype,
           size: file.size,
           storagePath,
@@ -144,7 +159,7 @@ router.post(
       record = await prisma.fileRecord.create({
         data: {
           title,
-          originalName: file.originalname,
+          originalName,
           mimeType: file.mimetype,
           size: file.size,
           storagePath,

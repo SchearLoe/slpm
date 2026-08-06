@@ -118,7 +118,17 @@ function renderInline(text: string): React.ReactNode[] {
     if (m[2]) nodes.push(<strong key={key++} className="font-semibold text-white">{m[2]}</strong>);
     else if (m[3]) nodes.push(<em key={key++} className="italic">{m[3]}</em>);
     else if (m[4]) nodes.push(<code key={key++} className="px-1 py-0.5 rounded bg-white/10 text-emerald-200 font-mono text-[0.85em]">{m[4]}</code>);
-    else if (m[5]) nodes.push(<a key={key++} href={m[6]} target="_blank" rel="noreferrer" className="text-emerald-300 underline hover:text-emerald-200">{m[5]}</a>);
+    else if (m[5]) {
+      // P7 安全修复：链接协议白名单——仅允许 http/https/mailto，拒绝 javascript:/data: 等 XSS 向量
+      const rawUrl = m[6];
+      const isSafe = /^(https?:|mailto:)/i.test(rawUrl) || (rawUrl.startsWith('/') && !rawUrl.startsWith('//'));
+      if (isSafe) {
+        nodes.push(<a key={key++} href={rawUrl} target="_blank" rel="noreferrer noopener" className="text-emerald-300 underline hover:text-emerald-200">{m[5]}</a>);
+      } else {
+        // 不安全协议降级为纯文本（不渲染成可点击链接）
+        nodes.push(<span key={key++} className="text-white/50">{m[5]}</span>);
+      }
+    }
     last = m.index + m[0].length;
   }
   if (last < text.length) nodes.push(text.slice(last));

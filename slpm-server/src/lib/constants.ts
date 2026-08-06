@@ -22,7 +22,7 @@ export const WS_ROLES = ['admin', 'pm', 'dev', 'qa', 'po'] as const;
 export type WsRole = (typeof WS_ROLES)[number];
 
 // 角色等级（用于产品级聚合时取最高角色）
-export const ROLE_RANK: Record<WsRole, number> = {
+export const ROLE_RANK: Record<string, number> = {
   po: 4,
   admin: 3,
   pm: 2,

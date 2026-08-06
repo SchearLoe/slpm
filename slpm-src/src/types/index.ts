@@ -33,6 +33,7 @@ export interface User {
   name: string;
   avatar: string; // 首字母，如 BR
   role: string;
+  jobTitle?: string | null; // P7：职位展示字段（与权限 role 物理分离，用户可自行修改）
   settings?: UserSettings; // /auth/register|login|me 均返回
   // P1-2：用户所属的工作区列表（含每条的角色）
   workspaces?: WorkspaceMembership[];

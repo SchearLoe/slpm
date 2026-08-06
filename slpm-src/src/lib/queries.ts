@@ -507,7 +507,8 @@ export function useUnreadNotificationCount() {
       const res = await api.get<{ count: number }>('/notifications/unread-count');
       return res.data.count;
     },
-    // P1-6：移除轮询，改用 WebSocket 实时推送
+    // P5-2：WebSocket 实时推送为主 + 60s 兜底轮询（防标签页空闲时红点不更新）
+    refetchInterval: 60_000,
   });
 }
 

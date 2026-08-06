@@ -33,6 +33,7 @@ export function asyncHandler(fn: AsyncRoute): RequestHandler {
 }
 
 // JWT 验证中间件 —— 从 Authorization: Bearer <token> 提取并校验
+// P7 安全修复：拒绝 purpose!=='access' 的 token（reset token 不能当登录 token 用）
 export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
@@ -40,7 +41,13 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   }
   const token = header.slice('Bearer '.length).trim();
   try {
-    req.user = verifyToken(token);
+    const payload = verifyToken(token);
+    // P7 安全修复：带 purpose 的 token（如 reset）只能用于特定流程，不能当普通登录凭证。
+    // 登录 token 不带 purpose（undefined）；reset token 带 purpose='reset'，此处拒绝。
+    if (payload.purpose !== undefined) {
+      return next(new ApiError(401, '该凭证类型不能用于此操作'));
+    }
+    req.user = payload;
     next();
   } catch {
     next(new ApiError(401, '登录已过期，请重新登录'));

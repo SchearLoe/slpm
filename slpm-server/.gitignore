@@ -5,4 +5,6 @@ dist
 .DS_Store
 # P1-3：上传文件本地存储（不提交真实文件内容）
 uploads
+# P7：超级管理员初始化时生成的随机密码文件（含明文，勿提交）
+.admin-initial-password
 # 保留 prisma/migrations
