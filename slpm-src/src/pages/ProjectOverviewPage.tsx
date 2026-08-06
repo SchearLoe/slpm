@@ -145,7 +145,7 @@ export const ProjectOverviewPage: React.FC = () => {
           <div className="space-y-2 min-w-0">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold">
               <ShieldCheck className="w-3.5 h-3.5" />
-              SLPM 旗舰版
+              SLPM · {new Date().getFullYear()}
             </div>
             <h2 className="text-[22px] font-extrabold text-white tracking-tight flex items-center gap-2 flex-wrap">
               任务总览

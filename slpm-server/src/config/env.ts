@@ -43,4 +43,7 @@ export const env = {
   enableDevResetLink: process.env.ENABLE_DEV_RESET_LINK === 'true',
   // P7：反向代理信任跳数（部署在 nginx/CDN 后应设为 1 或更高；直连部署保持默认）
   trustProxy: process.env.TRUST_PROXY === 'true',
+  // P5-3：演示账号（seed:demo 使用；生产不应运行 seed:demo）
+  demoEmail: process.env.DEMO_EMAIL ?? 'demo@slpm.local',
+  demoPassword: process.env.DEMO_PASSWORD ?? 'demo1234',
 } as const;

@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  // profile 从当前登录用户初始化（替代原硬编码 Brandon）
+  // profile 从当前登录用户初始化
   // P7 安全修复：职位展示字段改用 jobTitle（与权限 role 物理分离，防提权）
   const [profile, setProfile] = useState({ name: user?.name || '', role: user?.jobTitle || '', email: user?.email || '' });
 

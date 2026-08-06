@@ -199,13 +199,15 @@ export const AIAnalyticsPage: React.FC = () => {
       }
       return buckets;
     }
-    // Q2 累计（2026-04-01 起）：按周聚合
-    const start = new Date('2026-04-01T00:00:00Z').getTime();
+    // P5-3：本季度累计（动态计算当前季度起始日，不再硬编码 2026-04-01）
+    const today = new Date();
+    const qStartMonth = Math.floor(today.getMonth() / 3) * 3; // 0/3/6/9
+    const qStart = new Date(today.getFullYear(), qStartMonth, 1).getTime();
     const buckets: number[] = [];
     for (const t of tasks) {
       const d = new Date(t.createdAt ?? Date.now()).getTime();
-      if (d < start || d > now) continue;
-      const week = Math.floor((d - start) / (7 * day));
+      if (d < qStart || d > now) continue;
+      const week = Math.floor((d - qStart) / (7 * day));
       buckets[week] = (buckets[week] ?? 0) + 1;
     }
     return buckets;
@@ -325,7 +327,7 @@ export const AIAnalyticsPage: React.FC = () => {
             {([
               ['7d', '近 7 天'],
               ['30d', '近 30 天'],
-              ['q2', 'Q2 累计'],
+              ['q2', '本季度'],
             ] as const).map(([id, label]) => (
               <button
                 key={id}
@@ -381,7 +383,7 @@ export const AIAnalyticsPage: React.FC = () => {
           <div className="space-y-2 min-w-0">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-400/30 text-violet-200 text-[11px] font-semibold">
               <Flame className="w-3.5 h-3.5" />
-              AI 智能效能引擎 · {range === '7d' ? '近 7 天' : range === '30d' ? '近 30 天' : 'Q2'}
+              AI 智能效能引擎 · {range === '7d' ? '近 7 天' : range === '30d' ? '近 30 天' : '本季度'}
             </div>
             <h3 className="text-[22px] font-extrabold text-white tracking-tight flex items-center gap-2 flex-wrap">
               AI 效能推演

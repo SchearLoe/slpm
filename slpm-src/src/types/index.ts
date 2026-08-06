@@ -67,7 +67,7 @@ export interface TaskAssignee {
 }
 
 export interface TaskItem {
-  id: string; // 后端 cuid（原 demo 为 "WXB-2025-001"）
+  id: string; // 后端 cuid
   title: string;
   priority: Priority;
   status: TaskStatus;
@@ -93,7 +93,7 @@ export interface TaskItem {
   // P4-2：预估工时（小时）
   estimatedHours?: number | null;
   project: string; // 旧 demo 字段，后端暂不持久化
-  deadline: string; // 后端 ISO；旧 demo "2025-05-24 18:00"
+  deadline: string; // 后端 ISO
   description: string;
   tags: string[];
   aiSuggestions?: string[];

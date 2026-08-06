@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import multer from 'multer';
 import path from 'node:path';
+import { logger } from "../lib/logger.js";
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
@@ -38,7 +39,7 @@ const avatarUpload = multer({
   },
 });
 
-// 从姓名生成首字母头像（如 Brandon → BR）
+// 从姓名生成首字母头像（如 张三 → 张三）
 function avatarFromName(name: string): string {
   return name.trim().slice(0, 2).toUpperCase() || 'U';
 }
@@ -156,7 +157,7 @@ router.post(
     // P4-1：首个用户（且数据库尚无任何工作区）→ 自动播种「演示项目」教程数据
     seedDemoForUser(user.id, user.name)
       .then((seeded) => {
-        if (seeded) console.log(`🌱 已为 ${user.email} 创建演示项目（首次使用引导）`);
+        if (seeded) logger.log(`🌱 已为 ${user.email} 创建演示项目（首次使用引导）`);
       })
       .catch(() => {}); // 播种失败不影响注册
 
@@ -323,7 +324,7 @@ router.post(
       ? `${env.clientOrigin}/reset-password?token=${token}`
       : null;
     // 仅记录邮箱与事件，不把含 token 的完整链接写入日志（防日志泄露导致账号接管）
-    console.log(`🔑 [forgot-password] 已为 ${parsed.data.email} 生成重置请求${env.enableDevResetLink ? '（开发模式已返回链接）' : '（生产环境请接入邮件服务）'}`);
+    logger.log(`🔑 [forgot-password] 已为 ${parsed.data.email} 生成重置请求${env.enableDevResetLink ? '（开发模式已返回链接）' : '（生产环境请接入邮件服务）'}`);
     res.json({ ok: true, devResetUrl });
   }),
 );

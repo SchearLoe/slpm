@@ -1,3 +1,4 @@
+import { logger } from "./logger.js";
 import { prisma } from './prisma.js';
 import { env } from '../config/env.js';
 
@@ -29,21 +30,21 @@ export async function ensureSystemAdmin(): Promise<void> {
 
   // P7 安全修复：明文密码不再打印到 stdout（防容器日志聚合泄露）。
   // 改为写入本地一次性文件 .admin-initial-password（仅安装人员可读，权限 0600）
-  console.log('════════════════════════════════════════════');
-  console.log('🛡 已初始化超级管理员账号（首次安装）');
-  console.log(`   邮箱: ${email}`);
+  logger.log('════════════════════════════════════════════');
+  logger.log('🛡 已初始化超级管理员账号（首次安装）');
+  logger.log(`   邮箱: ${email}`);
   if (env.initialAdminPassword) {
-    console.log('   密码: 使用 .env 配置的 INITIAL_ADMIN_PASSWORD');
+    logger.log('   密码: 使用 .env 配置的 INITIAL_ADMIN_PASSWORD');
   } else {
     // 随机密码写入本地文件，不直接落 stdout
     const fs = await import('node:fs');
     const pwdFile = '.admin-initial-password';
     fs.writeFileSync(pwdFile, `邮箱: ${email}\n密码: ${password}\n（请立即登录并修改密码，然后删除此文件）\n`, { mode: 0o600 });
-    console.log(`   随机密码已写入文件: ${pwdFile}（请查看后立即删除）`);
+    logger.log(`   随机密码已写入文件: ${pwdFile}（请查看后立即删除）`);
   }
-  console.log('   ⚠ 请立即登录并修改密码！如需预设账号，可在 .env 配置');
-  console.log('     INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD');
-  console.log('════════════════════════════════════════════');
+  logger.log('   ⚠ 请立即登录并修改密码！如需预设账号，可在 .env 配置');
+  logger.log('     INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD');
+  logger.log('════════════════════════════════════════════');
 }
 
 function randomPassword(): string {
@@ -145,24 +146,26 @@ export async function seedDemoForUser(userId: string, userName: string): Promise
 
 /** 手动种子入口：创建演示账号 + 演示数据（幂等：已存在演示账号则跳过） */
 export async function seedDemoManual() {
-  const existing = await prisma.user.findUnique({ where: { email: 'demo@slpm.local' } });
+  // P5-3：演示账号/密码从 env 读取（默认值仅用于本地开发评估）
+  const demoEmail = env.demoEmail;
+  const demoPassword = env.demoPassword;
+  const existing = await prisma.user.findUnique({ where: { email: demoEmail } });
   if (existing) {
-    console.log('⚠️ 演示账号 demo@slpm.local 已存在，跳过（如需重置请先删除该用户）');
+    logger.log(`⚠️ 演示账号 ${demoEmail} 已存在，跳过（如需重置请先删除该用户）`);
     return;
   }
   const bcrypt = (await import('bcryptjs')).default;
-  const password = 'demo1234';
   const user = await prisma.user.create({
     data: {
-      email: 'demo@slpm.local',
-      passwordHash: await bcrypt.hash(password, 12),
+      email: demoEmail,
+      passwordHash: await bcrypt.hash(demoPassword, 12),
       name: '演示用户',
       role: 'system_admin',
       settings: { create: {} },
     },
   });
   const seeded = await seedDemoForUser(user.id, user.name);
-  console.log(seeded
-    ? `✅ 演示数据已创建：账号 demo@slpm.local / ${password}（system_admin）`
+  logger.log(seeded
+    ? `✅ 演示数据已创建：账号 ${demoEmail}（system_admin）`
     : '⚠️ 数据库已有工作区，跳过演示工作区创建（演示账号仍已创建）');
 }

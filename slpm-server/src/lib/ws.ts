@@ -9,6 +9,7 @@
  */
 import { Server as SocketServer, Socket } from 'socket.io';
 import { verifyToken } from './jwt.js';
+import { logger } from './logger.js';
 import { prisma } from './prisma.js';
 
 let io: SocketServer | null = null;
@@ -60,7 +61,7 @@ export function setupSocket(server: SocketServer) {
 
   server.on('connection', (socket) => {
     const userId = socket.data.userId as string;
-    console.log(`[ws] 用户 ${userId} 已连接 (${socket.id})`);
+    logger.log(`[ws] 用户 ${userId} 已连接 (${socket.id})`);
 
     // P4-2：标记在线 + 广播给所在工作区
     online.set(userId, (online.get(userId) ?? 0) + 1);
@@ -80,7 +81,7 @@ export function setupSocket(server: SocketServer) {
         online.set(userId, count);
       }
       broadcastPresence(userId, userWorkspaces.get(userId) ?? []);
-      console.log(`[ws] 用户 ${userId} 已断开`);
+      logger.log(`[ws] 用户 ${userId} 已断开`);
     });
   });
 }
