@@ -50,6 +50,7 @@ SLPM 是一个全栈项目管理系统，前端基于高保真 Liquid Glass 交�
 | P4-2 | 看板拖拽改阶段 · 任务预估工时 + 进度燃尽图 · 日程冲突预警 · 通知偏好 · 产品路线图/需求池/跨项目指派/Release Notes · 忘记密码 · 在线状态绿点 · Playwright E2E |
 | P5-1 | 安全与健壮性增强：限流/上传校验/错误边界/分页/共享枚举 |
 | P6 | 标签库（CRUD+颜色+筛选）· 任务清单 Checklist（完成度汇总）· 审计日志（系统级操作记录）· 任务批量操作 · 任务详情独立路由 · 评论编辑删除 · 筛选 URL 持久化 · 通知排序+类型筛选 · 日程导出 ICS · 知识库 Markdown 渲染 · 文件视图切换 · 看板 WIP 限制 · 统一头像组件 |
+| P8 | 安全加固（头像XSS/Helmet/审计IDOR/WS鉴权/AI限流/JWT算法钉/fail-fast 启动）· 全局命令面板 ⌘K · 键盘快捷键（N/Esc/?/）· UI 基础设施（ConfirmDialog/Toast多变体/Skeleton/EmptyState/LiquidModal焦点陷阱/GlassCard键盘可达）· 交互修复（Hooks崩溃/看板测试验证阶段/删除二次确认/通知数字徽章+抖动/操作高亮/密码可见性+强度）· 视觉打磨（StatusBadge枚举判色/燃尽图拉伸/Q2动态/暗色控件/range滑块）|
 
 ---
 

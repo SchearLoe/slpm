@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { requireWorkspace } from '../middleware/workspace.js';
 import { requireSystemAdmin } from '../middleware/admin.js';
+import { aiLimiter } from '../middleware/rateLimit.js';
 import { ApiError } from '../middleware/error.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
 
@@ -165,6 +166,7 @@ router.post(
   '/suggest',
   requireAuth,
   requireWorkspace,
+  aiLimiter,
   asyncHandler(async (req, res) => {
     const parsed = suggestSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
@@ -219,6 +221,7 @@ router.post(
   '/suggest/stream',
   requireAuth,
   requireWorkspace,
+  aiLimiter,
   asyncHandler(async (req, res) => {
     const parsed = suggestSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());

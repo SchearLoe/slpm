@@ -3,6 +3,7 @@ import { FileText, Search, UploadCloud, Download, Eye, Share2, MoreHorizontal, P
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { QueryError } from '@/components/QueryError';
 import { useToast } from '@/components/ui/Toast';
 import { FileRecord } from '@/types';
@@ -19,10 +20,7 @@ export const FileDocumentsPage: React.FC = () => {
   const renameFile = useRenameFile(); // P1-5 重命名
   // P1-5：预览 blob URL（用 fileId 触发 lazy fetch）
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
-
-  if (isError) {
-    return <QueryError onRetry={() => refetch()} message="文件列表加载失败，请检查网络或工作区状态" />;
-  }
+  // P8：所有 Hook 必须在任何条件 return 之前调用（修复 React Hooks 顺序崩溃 bug）
   const previewBlobQ = useFilePreviewUrl(previewFileId);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameTitle, setRenameTitle] = useState('');
@@ -38,6 +36,8 @@ export const FileDocumentsPage: React.FC = () => {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [menuId, setMenuId] = useState<string | null>(null);
+  // P8：删除二次确认（替代之前"点删即删"的误删风险）
+  const [pendingDelete, setPendingDelete] = useState<FileRecord | null>(null);
 
   // 上传表单状态
   const [uploadTitle, setUploadTitle] = useState('');
@@ -100,14 +100,24 @@ export const FileDocumentsPage: React.FC = () => {
     }
   };
 
-  // 真实删除
+  // P8：真实删除（经 ConfirmDialog 二次确认后执行）
   const handleDelete = async (file: FileRecord) => {
     setMenuId(null);
+    setPendingDelete(file);
+  };
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const file = pendingDelete;
     try {
       await deleteFile.mutateAsync(file.id);
       show('文档已删除');
+      // 如果正在预览/重命名的是被删文件，关闭相关弹窗
+      if (previewId === file.id) setPreviewId(null);
+      if (renameId === file.id) setRenameId(null);
     } catch (err) {
       show(apiError(err, '删除失败'));
+    } finally {
+      setPendingDelete(null);
     }
   };
 
@@ -123,6 +133,11 @@ export const FileDocumentsPage: React.FC = () => {
       show(apiError(err, '重命名失败'));
     }
   };
+
+  // P8：错误态 early return（置于所有 Hook 之后，避免 Hooks 顺序崩溃）
+  if (isError) {
+    return <QueryError onRetry={() => refetch()} message="文件列表加载失败，请检查网络或工作区状态" />;
+  }
 
   return (
     <div className="w-full h-full min-h-0 flex flex-col gap-4 pb-1">
@@ -398,6 +413,17 @@ export const FileDocumentsPage: React.FC = () => {
           />
         </form>
       </LiquidModal>
+
+      {/* P8：删除二次确认（替代之前的"点删即删"） */}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        variant="danger"
+        title="删除该文档？"
+        description={pendingDelete ? `「${pendingDelete.title}」将被永久删除，且关联的版本历史也会清除，该操作不可恢复。` : ''}
+        confirmText="确认删除"
+      />
     </div>
   );
 };

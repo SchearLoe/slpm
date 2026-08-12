@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { LiquidModal } from '@/components/ui/LiquidModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useToast } from '@/components/ui/Toast';
 import { useTags, useCreateTag, useUpdateTag, useDeleteTag } from '@/lib/queries';
 import { TAG_COLOR_OPTIONS, tagColorClass } from '@/lib/tagColors';
 import type { Tag, TagColor } from '@/types';
@@ -17,6 +19,7 @@ interface TagManageModalProps {
  * 工作区级标签的 CRUD：创建（名称 + 颜色）、改色、重命名（级联更新任务 tags）、删除。
  */
 export const TagManageModal: React.FC<TagManageModalProps> = ({ open, onClose }) => {
+  const { show, ToastEl } = useToast();
   const { data: tags = [] } = useTags();
   const createTag = useCreateTag();
   const updateTag = useUpdateTag();
@@ -27,6 +30,8 @@ export const TagManageModal: React.FC<TagManageModalProps> = ({ open, onClose })
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState<TagColor>('emerald');
+  // P8：删除二次确认（替代原生 confirm）
+  const [pendingDelete, setPendingDelete] = useState<Tag | null>(null);
 
   const handleCreate = () => {
     const name = newName.trim();
@@ -35,7 +40,7 @@ export const TagManageModal: React.FC<TagManageModalProps> = ({ open, onClose })
       { name, color: newColor },
       {
         onSuccess: () => setNewName(''),
-        onError: () => alert('创建失败：标签名可能已存在'),
+        onError: () => show('创建失败：标签名可能已存在'),
       },
     );
   };
@@ -57,6 +62,8 @@ export const TagManageModal: React.FC<TagManageModalProps> = ({ open, onClose })
   };
 
   return (
+    <>
+    {ToastEl}
     <LiquidModal open={open} onClose={onClose} title="标签库管理" subtitle="工作区级标签 · 名称颜色统一管理" widthClass="max-w-xl">
       {/* 新建 */}
       <div className="flex items-center gap-2 mb-4">
@@ -119,11 +126,7 @@ export const TagManageModal: React.FC<TagManageModalProps> = ({ open, onClose })
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => {
-                        if (confirm(`删除标签「${tag.name}」？将同时从所有任务中移除该标签。`)) {
-                          deleteTag.mutate(tag.id);
-                        }
-                      }}
+                      onClick={() => setPendingDelete(tag)}
                       className="liquid-btn-ghost w-7 h-7 rounded-md flex items-center justify-center text-rose-300/70 hover:text-rose-300"
                       title="删除"
                     >
@@ -137,6 +140,22 @@ export const TagManageModal: React.FC<TagManageModalProps> = ({ open, onClose })
         </div>
       )}
     </LiquidModal>
+    {/* P8：删除标签二次确认 */}
+    <ConfirmDialog
+      open={!!pendingDelete}
+      onClose={() => setPendingDelete(null)}
+      onConfirm={async () => {
+        if (pendingDelete) {
+          deleteTag.mutate(pendingDelete.id);
+          show(`标签「${pendingDelete.name}」已删除`);
+        }
+      }}
+      variant="danger"
+      title={pendingDelete ? `删除标签「${pendingDelete.name}」？` : '删除标签？'}
+      description="将同时从所有任务中移除该标签，该操作不可恢复。"
+      confirmText="确认删除"
+    />
+    </>
   );
 };
 

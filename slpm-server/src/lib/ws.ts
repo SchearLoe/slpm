@@ -41,6 +41,12 @@ export function setupSocket(server: SocketServer) {
     if (!token) return next(new Error('缺少认证 token'));
     try {
       const payload = verifyToken(token);
+      // P8 安全修复（MH3）：拒绝 password-reset 专用 token 用于建立 WebSocket。
+      // HTTP requireAuth 已做此校验，WS 须保持一致，防止 15 分钟 reset token 被用来
+      // 潜入工作区房间窃听实时通知/任务数据。
+      if (payload.purpose !== undefined) {
+        return next(new Error('该凭证类型不能用于 WebSocket'));
+      }
       socket.data.userId = payload.sub;
       // 查该用户的所有 workspace，加入对应房间
       const members = await prisma.workspaceMember.findMany({

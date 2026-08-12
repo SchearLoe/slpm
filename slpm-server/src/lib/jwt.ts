@@ -12,5 +12,6 @@ export function signToken(payload: JwtPayload, expiresIn?: string): string {
 }
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, env.jwtSecret) as JwtPayload;
+  // P8 安全修复（M5）：显式钉死算法为 HS256，杜绝 alg 混淆/none 攻击
+  return jwt.verify(token, env.jwtSecret, { algorithms: ['HS256'] }) as JwtPayload;
 }

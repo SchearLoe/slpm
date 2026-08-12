@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { BarChart3, CheckCircle2, AlertTriangle, Users, Zap, ShieldCheck, PieChart, ArrowRight, Info, Clock, Target, TrendingUp } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
+import { SkeletonCards } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { springSoft } from '@/lib/motion';
 import { ViewTransition } from '@/components/ui/PageTransition';
@@ -22,7 +24,8 @@ const PHASE_COLOR: Record<string, string> = {
 
 export const ProjectOverviewPage: React.FC = () => {
   const { show, ToastEl } = useToast();
-  const { data: tasks = [] } = useTasks();
+  const { data: tasks = [], isLoading } = useTasks();
+  const navigate = useNavigate();
   const { currentRole } = useApp();
   const roleCfg = getRoleConfig(currentRole);
   const isReadOnly = roleCfg.readOnlyPages.includes('overview');
@@ -194,19 +197,22 @@ export const ProjectOverviewPage: React.FC = () => {
               animate={{ rotate: 360 }}
               transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
               className="w-[72px] h-[72px] rounded-full border-4 border-emerald-400/80 border-t-transparent flex items-center justify-center font-extrabold text-sm text-white shadow-[0_0_24px_rgba(16,185,129,0.35)]"
+              title={`${new Date().getFullYear()} 年第 ${Math.floor(new Date().getMonth() / 3) + 1} 季度`}
             >
-              Q2
+              {`Q${Math.floor(new Date().getMonth() / 3) + 1}`}
             </motion.div>
           </div>
         </div>
       </motion.div>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        {[
-          { title: '任务完成', value: `${stats.completed} / ${stats.total}`, tip: `完成率 ${stats.completionRate}%`, icon: CheckCircle2, color: 'text-emerald-300' },
-          { title: '进行中任务', value: `${stats.total - stats.completed} 项`, tip: '当前在办（含待处理）', icon: Zap, color: 'text-cyan-300' },
-          { title: '团队平均负荷', value: `${memberLoad.length ? Math.round(memberLoad.reduce((s, m) => s + m.load, 0) / memberLoad.length) : 0}%`, tip: '基于在办任务归一化', icon: Users, color: 'text-violet-300' },
-          { title: '潜在阻塞点', value: `${stats.blockedCount} 项`, tip: `${stats.overdue} 延期 / ${stats.pending} 待处理`, icon: AlertTriangle, color: 'text-rose-300' },
+        {isLoading ? (
+          <div className="col-span-2 xl:col-span-4"><SkeletonCards cards={4} /></div>
+        ) : [
+          { title: '任务完成', value: `${stats.completed} / ${stats.total}`, tip: `完成率 ${stats.completionRate}%`, icon: CheckCircle2, color: 'text-emerald-300', to: '/tasks' },
+          { title: '进行中任务', value: `${stats.total - stats.completed} 项`, tip: '当前在办（含待处理）', icon: Zap, color: 'text-cyan-300', to: '/tasks' },
+          { title: '团队平均负荷', value: `${memberLoad.length ? Math.round(memberLoad.reduce((s, m) => s + m.load, 0) / memberLoad.length) : 0}%`, tip: '基于在办任务归一化', icon: Users, color: 'text-violet-300', to: '/team' },
+          { title: '潜在阻塞点', value: `${stats.blockedCount} 项`, tip: `${stats.overdue} 延期 / ${stats.pending} 待处理`, icon: AlertTriangle, color: 'text-rose-300', to: '/tasks' },
         ].map((c, i) => (
           <motion.button
             key={c.title}
@@ -215,15 +221,18 @@ export const ProjectOverviewPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05, ...springSoft }}
             whileHover={{ y: -2 }}
-            onClick={() => show(`${c.title}：${c.value}（${c.tip}），基于当前工作区真实任务聚合`)}
-            className="liquid-glass liquid-glass-hover p-4 text-left space-y-2"
+            onClick={() => navigate(c.to)}
+            className="liquid-glass liquid-glass-hover p-4 text-left space-y-2 group"
           >
             <div className="flex items-center justify-between text-[11px] text-white/40">
               <span>{c.title}</span>
               <c.icon className={`w-4 h-4 ${c.color}`} />
             </div>
             <div className="text-[22px] font-extrabold text-white">{c.value}</div>
-            <div className={`text-[11px] font-medium ${c.color}`}>{c.tip}</div>
+            <div className={`text-[11px] font-medium ${c.color} flex items-center gap-1`}>
+              {c.tip}
+              <ArrowRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-60 group-hover:translate-x-0 transition-all" />
+            </div>
           </motion.button>
         ))}
       </div>
@@ -379,7 +388,9 @@ export const ProjectOverviewPage: React.FC = () => {
             </h3>
             {burndown ? (
               <div className="space-y-2">
-                <svg viewBox="0 0 100 44" className="w-full h-36" preserveAspectRatio="none">
+                {/* P8 修复：去掉 preserveAspectRatio="none"（会把圆点横向拉伸成椭圆），
+                    改用默认 meet 保持比例；线条占满宽度，圆点保持正圆 */}
+                <svg viewBox="0 0 100 44" className="w-full h-36" preserveAspectRatio="xMidYMid meet">
                   {/* 网格线 */}
                   {[0, 1, 2, 3].map((i) => (
                     <line key={i} x1="0" y1={i * 11} x2="100" y2={i * 11} stroke="rgba(255,255,255,0.06)" strokeWidth="0.3" />

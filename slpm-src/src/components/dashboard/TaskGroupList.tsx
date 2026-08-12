@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ArrowUpDown, LayoutGrid, Clock, CheckSquare, Square, X, AlertTriangle } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/Toast';
@@ -52,8 +53,17 @@ export const TaskGroupList: React.FC = () => {
   // P6-D：批量选择
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // P8：批量删除二次确认（替代原生 confirm）
+  const [pendingBatchDelete, setPendingBatchDelete] = useState(false);
+  // P8：操作后高亮反馈 —— 刚移动/新建的任务闪一下 emerald 边框，帮用户在长列表里快速定位
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const flashHighlight = (id: string) => {
+    setHighlightId(id);
+    setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 1600);
+  };
 
-  const phases = ['需求评审', '产品设计', '开发实现'] as const;
+  // P8 修复：补全"测试验证"阶段（原只渲染 3 列，导致该阶段任务在看板里完全不可见）
+  const phases = ['需求评审', '产品设计', '开发实现', '测试验证'] as const;
   // P6-E8：看板列 WIP 限制提示阈值（进行中任务数超过此值高亮警示）
   const WIP_WARN_THRESHOLD = 6;
 
@@ -68,6 +78,7 @@ export const TaskGroupList: React.FC = () => {
     try {
       await updateTask.mutateAsync({ id: taskId, phase: phase as typeof task.phase });
       show(`「${task.title}」已移至${phase}`);
+      flashHighlight(taskId);
     } catch (err) {
       show(apiError(err, '移动失败'));
     }
@@ -107,13 +118,29 @@ export const TaskGroupList: React.FC = () => {
       setPhase: '移动阶段',
       delete: '删除',
     };
-    if (action === 'delete' && !confirm(`确认批量${label[action]} ${ids.length} 个任务？`)) return;
+    // P8：批量删除改用 ConfirmDialog（替代原生 confirm）
+    if (action === 'delete') {
+      setPendingBatchDelete(true);
+      return;
+    }
     try {
       const r = await batchTasks.mutateAsync({ ids, action, ...payload });
       show(`已${label[action]} ${r.affected} 个任务`);
       exitSelectMode();
     } catch (err) {
       show(apiError(err, '批量操作失败'));
+    }
+  };
+  // P8：批量删除确认后执行
+  const confirmBatchDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      const r = await batchTasks.mutateAsync({ ids, action: 'delete' });
+      show(`已删除 ${r.affected} 个任务`);
+      exitSelectMode();
+    } catch (err) {
+      show(apiError(err, '批量删除失败'));
     }
   };
 
@@ -127,6 +154,16 @@ export const TaskGroupList: React.FC = () => {
   return (
     <div className="w-full h-full min-h-0 flex flex-col gap-2.5 select-none">
       {ToastEl}
+      {/* P8：批量删除二次确认 */}
+      <ConfirmDialog
+        open={pendingBatchDelete}
+        onClose={() => setPendingBatchDelete(false)}
+        onConfirm={confirmBatchDelete}
+        variant="danger"
+        title={`批量删除 ${selectedIds.size} 个任务？`}
+        description="被删除的任务及其评论、活动记录将一并清除，该操作不可恢复。"
+        confirmText="确认删除"
+      />
       {/* 筛选工具条：永远单行，不换行 */}
       <div className="flex items-center gap-2 flex-nowrap min-w-0 overflow-x-auto pb-0.5 shrink-0">
         <div className="liquid-pill p-1 flex items-center gap-0.5 relative shrink-0 whitespace-nowrap">
@@ -246,6 +283,7 @@ export const TaskGroupList: React.FC = () => {
             需求评审: { dot: 'bg-emerald-400', badge: 'text-emerald-300 bg-emerald-400/10 border-emerald-400/25' },
             产品设计: { dot: 'bg-sky-400', badge: 'text-sky-300 bg-sky-400/10 border-sky-400/25' },
             开发实现: { dot: 'bg-violet-400', badge: 'text-violet-300 bg-violet-400/10 border-violet-400/25' },
+            测试验证: { dot: 'bg-amber-400', badge: 'text-amber-300 bg-amber-400/10 border-amber-400/25' },
           }[phase];
 
           return (
@@ -347,7 +385,8 @@ export const TaskGroupList: React.FC = () => {
                               'w-full px-3 py-2.5 flex items-center justify-between gap-2 text-left transition-colors duration-200 relative cursor-pointer',
                               selected ? 'bg-emerald-400/[0.08]' : 'hover:bg-white/[0.03]',
                               dragTaskId === task.id && 'opacity-40',
-                              checked && 'bg-emerald-400/[0.05]'
+                              checked && 'bg-emerald-400/[0.05]',
+                              highlightId === task.id && 'ring-1 ring-emerald-400/60 bg-emerald-400/[0.07]'
                             )}
                           >
                             {selected && !selectMode && (

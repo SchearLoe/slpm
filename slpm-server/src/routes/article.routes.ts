@@ -168,7 +168,14 @@ router.patch(
     if (d.title !== undefined) data.title = d.title;
     if (d.body !== undefined) data.body = d.body;
     if (d.category !== undefined) data.category = d.category;
-    if (d.pinned !== undefined) data.pinned = d.pinned;
+    // P8 安全修复（L2）：置顶是工作区级管理动作，限 admin/pm（普通成员可改标题/正文/分类）。
+    if (d.pinned !== undefined) {
+      const role = req.workspace!.role;
+      if (role !== 'admin' && role !== 'pm') {
+        throw new ApiError(403, '仅管理员/PM 可置顶文章');
+      }
+      data.pinned = d.pinned;
+    }
 
     // 工作区内文章（非成员访问会被 findFirst 拦截在 update 报错前）
     const article = await prisma.knowledgeArticle.update({
@@ -210,13 +217,23 @@ router.patch(
 );
 
 // ---- DELETE /api/articles/:id ----
+// P8 安全修复（L2）：仅作者本人或 admin/pm 可删除，普通成员不能删他人文章。
 router.delete(
   '/:id',
   requireAuth,
   requireWorkspace,
   asyncHandler(async (req, res) => {
-    await prisma.knowledgeArticle.delete({
+    const role = req.workspace!.role;
+    const existing = await prisma.knowledgeArticle.findFirst({
       where: { id: req.params.id, workspaceId: req.workspace!.id },
+      select: { authorId: true },
+    });
+    if (!existing) throw new ApiError(404, '文章不存在');
+    if (existing.authorId !== req.user!.sub && role !== 'admin' && role !== 'pm') {
+      throw new ApiError(403, '仅作者本人或管理员/PM 可删除文章');
+    }
+    await prisma.knowledgeArticle.delete({
+      where: { id: req.params.id },
     });
     res.json({ ok: true });
   }),

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { KeyRound, Lock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { KeyRound, Lock, ArrowRight, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
 
 /** P4-2：密码重置页（/reset-password?token=xxx） */
@@ -15,6 +15,8 @@ export const ResetPasswordPage: React.FC = () => {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  // P8：密码可见性切换 + 实时强度指示
+  const [showPwd, setShowPwd] = useState(false);
 
   const field = 'liquid-input w-full pl-10 pr-3.5 py-2.5 rounded-xl text-[12px] text-white placeholder:text-white/30';
 
@@ -90,19 +92,29 @@ export const ResetPasswordPage: React.FC = () => {
               <Lock className="w-3.5 h-3.5 text-white/35 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
               <input
                 required
-                type="password"
+                type={showPwd ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="新密码（至少 8 位，含字母和数字）"
                 minLength={8}
                 className={field}
               />
+              <button
+                type="button"
+                onClick={() => setShowPwd((v) => !v)}
+                aria-label={showPwd ? '隐藏密码' : '显示密码'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors"
+              >
+                {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
+            {/* P8：实时密码强度指示条 */}
+            {password.length > 0 && <PasswordStrength password={password} />}
             <div className="relative">
               <Lock className="w-3.5 h-3.5 text-white/35 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
               <input
                 required
-                type="password"
+                type={showPwd ? 'text' : 'password'}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 placeholder="确认新密码"
@@ -127,6 +139,40 @@ export const ResetPasswordPage: React.FC = () => {
           </form>
         )}
       </motion.div>
+    </div>
+  );
+};
+
+/** P8：密码强度指示条（弱/中/强），基于长度+字符种类启发式 */
+function passwordStrength(p: string): { score: 0 | 1 | 2 | 3; label: string } {
+  if (!p) return { score: 0, label: '' };
+  let s = 0;
+  if (p.length >= 8) s++;
+  if (p.length >= 12) s++;
+  const kinds = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter((r) => r.test(p)).length;
+  if (kinds >= 2) s++;
+  if (kinds >= 3 && p.length >= 10) s = Math.max(s, 3);
+  const score = Math.min(3, s) as 0 | 1 | 2 | 3;
+  const label = ['太短', '弱', '中', '强'][score];
+  return { score, label };
+}
+
+const STRENGTH_COLOR = ['bg-white/15', 'bg-rose-400', 'bg-amber-400', 'bg-emerald-400'];
+const STRENGTH_TEXT = ['text-white/30', 'text-rose-300', 'text-amber-300', 'text-emerald-300'];
+
+const PasswordStrength: React.FC<{ password: string }> = ({ password }) => {
+  const { score, label } = passwordStrength(password);
+  return (
+    <div className="flex items-center gap-2 px-1">
+      <div className="flex-1 flex gap-1">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className={`h-1 flex-1 rounded-full transition-colors ${i <= score ? STRENGTH_COLOR[score] : 'bg-white/10'}`}
+          />
+        ))}
+      </div>
+      <span className={`text-[10px] font-medium tabular-nums w-6 text-right ${STRENGTH_TEXT[score]}`}>{label}</span>
     </div>
   );
 };

@@ -2,6 +2,7 @@ import express from 'express';
 import http from 'node:http';
 import { Server as SocketServer } from 'socket.io';
 import cors from 'cors';
+import helmet from 'helmet';
 import fs from 'node:fs';
 import { env } from './config/env.js';
 import { prisma } from './lib/prisma.js';
@@ -40,6 +41,18 @@ app.use(
   cors({
     origin: env.clientOrigin,
     credentials: true,
+  }),
+);
+// P8 安全修复（M2）：安全响应头。API 服务器不返回 HTML，使用聚焦配置：
+//  - nosniff：防 MIME 嗅探（直接缓解 H1 头像 XSS 的浏览器侧风险）
+//  - X-Frame-Options DENY：防点击劫持
+//  - 隐藏 X-Powered-By
+//  - 关闭 CSP（API 无需；前端 SPA 由 nginx 单独下发 CSP）
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' }, // 头像/文件需跨域被前端 <img> 加载
   }),
 );
 // P7 安全修复：限制请求体大小，防超大 JSON DoS
@@ -90,15 +103,20 @@ const io = new SocketServer(server, {
 setupSocket(io);
 
 // P4-1：启动引导（超级管理员初始化）→ 监听端口
+// P8 安全修复（H2）：ensureSystemAdmin 失败不再静默吞掉。
+//  原实现 try/catch 后继续启动，会导致"无管理员启动" → 首位注册者静默获得 system_admin（提权后门）。
+//  现改为：失败即拒绝启动（fail-fast），确保数据库就绪且管理员存在后才对外提供服务。
 async function bootstrap() {
   try {
     await ensureSystemAdmin();
   } catch (e) {
-    console.error('⚠️ 超级管理员初始化失败（忽略，继续启动）:', e instanceof Error ? e.message : e);
+    console.error('❌ 超级管理员初始化失败，拒绝启动（fail-fast）:', e instanceof Error ? e.message : e);
+    console.error('   请检查 DATABASE_URL / 数据库连接是否就绪后重试。');
+    process.exit(1);
   }
   server.listen(env.port, () => {
     console.log(`🟢 slpm-server 运行中: http://localhost:${env.port}`);
-    console.log(`   环境: ${env.nodeEnv} · 前端: ${env.clientOrigin} · WebSocket ✓`);
+    console.log(`   环境: ${env.nodeEnv} · 前端: ${env.clientOrigin} · WebSocket ✓ · Helmet ✓`);
   });
 }
 

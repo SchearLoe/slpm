@@ -410,7 +410,7 @@ export const SettingsCenterPage: React.FC = () => {
                     step={5}
                     value={fontScale}
                     onChange={(e) => setFontScale(Number(e.target.value))}
-                    className="w-full accent-emerald-500"
+                    className="w-full liquid-range"
                   />
                 </div>
               </GlassCard>
@@ -480,7 +480,7 @@ export const SettingsCenterPage: React.FC = () => {
                           step={0.1}
                           value={aiCfgTemp}
                           onChange={(e) => setAiCfgTemp(Number(e.target.value))}
-                          className="w-full accent-emerald-500 mt-2"
+                          className="w-full liquid-range mt-2"
                         />
                       </div>
                     </div>
@@ -649,7 +649,10 @@ export const SettingsCenterPage: React.FC = () => {
                   <p className="text-[10px] text-white/30 mt-1">邮箱为登录账号，不可修改</p>
                 </div>
                 <div>
-                  <label className="text-[11px] text-white/45 mb-1.5 block">时区</label>
+                  <label className="text-[11px] text-white/45 mb-1.5 flex items-center gap-1.5">
+                    时区
+                    <SoonTag />
+                  </label>
                   <LiquidSelect
                     value={timezone}
                     onChange={setTimezone}
@@ -659,9 +662,13 @@ export const SettingsCenterPage: React.FC = () => {
                       { value: 'Europe/London', label: 'Europe/London' },
                     ]}
                   />
+                  <p className="text-[10px] text-white/30 mt-1">时区偏好已记录，将用于未来的日程/截止时间本地化展示</p>
                 </div>
                 <div>
-                  <label className="text-[11px] text-white/45 mb-1.5 block">界面语言</label>
+                  <label className="text-[11px] text-white/45 mb-1.5 flex items-center gap-1.5">
+                    界面语言
+                    <SoonTag />
+                  </label>
                   <LiquidSelect
                     value={language}
                     onChange={setLanguage}
@@ -671,6 +678,7 @@ export const SettingsCenterPage: React.FC = () => {
                       { value: 'en-US', label: 'English' },
                     ]}
                   />
+                  <p className="text-[10px] text-white/30 mt-1">多语言界面正在开发中，当前显示简体中文</p>
                 </div>
               </div>
               <button
@@ -732,8 +740,11 @@ export const SettingsCenterPage: React.FC = () => {
                 <SectionTitle icon={Keyboard} title="快捷键" />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px]">
                   {[
-                    ['⌘ K / Ctrl+K', '全局搜索（跨任务/文件/知识库/成员）'],
-                    ['N', '新建任务（任务页内）'],
+                    ['⌘ K / Ctrl+K', '打开命令面板（跳转/操作一键直达）'],
+                    ['N', '新建任务'],
+                    ['/', '聚焦搜索框'],
+                    ['Esc', '关闭弹窗 / 命令面板'],
+                    ['?', '打开命令面板（备选）'],
                   ].map(([k, v]) => (
                     <div key={k} className="flex items-center justify-between p-2.5 rounded-xl bg-black/25 border border-white/[0.05]">
                       <span className="text-white/55">{v}</span>
@@ -772,5 +783,14 @@ function SectionTitle({ icon: Icon, title }: { icon: React.ElementType; title: s
       <Icon className="w-4 h-4 text-emerald-300" />
       {title}
     </h3>
+  );
+}
+
+/** P8："即将推出"小标签，用于标注尚未真正生效的设置项，避免用户误以为按钮坏了 */
+function SoonTag() {
+  return (
+    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/25 leading-none">
+      即将推出
+    </span>
   );
 }

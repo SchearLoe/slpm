@@ -4,6 +4,62 @@
 
 ---
 
+## 2026-08-11
+
+### P8：安全加固 + 交互/视觉体验大升级 + 全局命令面板
+
+本轮基于全栈安全审计与前端 UX/视觉审计，集中修复高危漏洞、崩溃 Bug 与体验缺陷，并补齐命令面板等标志性能力。无数据库迁移、无破坏性 API 变更。
+
+#### 一、安全加固（后端，11 项）
+- **H1 头像存储型 XSS**：头像上传 `fileFilter` 增 mimetype↔扩展名白名单一致性校验；落盘扩展名强制由 mimetype 推导（忽略客户端 `.html`）；读取端按扩展名固定 `Content-Type` + `nosniff` + `inline`（纵深防御）。
+- **M2 安全响应头**：引入 `helmet`（CSP 关闭、CORP 允许跨域加载头像/文件），补齐 `X-Content-Type-Options` / `X-Frame-Options` 等。
+- **MH1 审计日志 IDOR**：工作区视图忽略 `workspaceId` 查询参数覆盖，强制锁定为已鉴权 header 值，防跨工作区越权读取。
+- **MH2 AI 成本 DoS**：新增 `aiLimiter`（每用户每分钟 10 次，按 JWT sub 而非 IP 计），挂到 `/api/ai/suggest` 与 `/api/ai/suggest/stream`。
+- **MH3 WebSocket 接受 reset token**：WS 认证中间件拒绝 `purpose=reset` 的 token，与 HTTP `requireAuth` 保持一致。
+- **H2 首注册静默提权**：`ensureSystemAdmin` 失败改为 fail-fast（拒绝启动），杜绝"无管理员启动 → 首注册者得 system_admin"后门。
+- **M5 JWT 算法未钉**：`jwt.verify` 显式钉 `algorithms: ['HS256']`。
+- **L2 文章越权**：DELETE 限作者本人或 admin/pm；置顶限 admin/pm。
+- 维持不变：SQL 注入（全参数化）、mass-assignment（手工字段）、路径穿越（uuid + sendFile）、AI Key AES-256-GCM 加密脱敏均确认无问题。
+
+#### 二、UI 基础设施（新增 4 组件 + 重构 2 组件）
+- **`ConfirmDialog`**（新）：统一二次确认弹窗，替代全站原生 `confirm()/alert()`，支持 danger/warning/info 三语义 + 提交中防误关。
+- **`Toast` 重构**（原仅 success 绿色）：新增 error/warning/info 四变体 + 启发式自动着色（历史 `show(msg)` 调用零改动即获正确反馈）；修复计时 bug（连续 show 互踩 timer）；支持堆叠（最多 4 条）+ 手动关闭。
+- **`Skeleton` / `SkeletonRows` / `SkeletonCards`**（新）：统一骨架屏加载态，区分"加载中"与"真空数据"。
+- **`EmptyState`**（新）：统一空态组件（液态玻璃插画 + 明确主 CTA），替代一行灰字。
+- **`LiquidModal` 升级**：焦点陷阱（Tab 循环）、`aria-labelledby`、打开自动聚焦/关闭归还焦点、`closeOnOverlayClick` + `blockCloseWhileSubmitting` 开关。
+- **`GlassCard` 升级**：interactive 卡片自动加 `role/tabIndex/onKeyDown`，键盘可达（Enter/Space 触发）。
+- **`StatusBadge` 重构**：配色判断从脆弱的中文字面量严格相等改为归一化匹配（兼容繁简/空格/英文）。
+
+#### 三、交互逻辑修复（7 项）
+- **FileDocumentsPage Hooks 崩溃**（高危）：条件 return 移到所有 Hook 之后，修复"错误态→成功态切换时 React Hooks 顺序变化导致白屏"。
+- **看板丢失"测试验证"阶段**：`TaskGroupList` phases 补全第 4 列（含配色），该阶段任务不再隐身。
+- **删除二次确认**：文件删除 / 日程删除 / 任务批量删除 全部接入 `ConfirmDialog`，消除"点删即删"误删风险。
+- **通知数字徽章 + 铃铛抖动**：未读数从 1.5px 小点升级为数字徽章（>99 显示 99+），新通知到达时铃铛 shake 动画。
+- **操作后高亮反馈**：拖拽改阶段后目标任务闪现 emerald 边框，帮用户在长列表定位。
+- **密码可见性切换 + 强度指示器**：登录页/重置页加 👁 切换；重置页加实时强度条（弱/中/强）。
+- **KPI 卡点击导航**：总览页 KPI 卡从"点击只弹 Toast"改为跳转对应页面 + hover 箭头提示。
+
+#### 四、视觉打磨（6 项）
+- **燃尽图拉伸变形**：`preserveAspectRatio="none"` → `xMidYMid meet`，圆点保持正圆。
+- **Q2 硬编码**：总览页旋转环改为动态当前季度（`Q${月/3+1}`）。
+- **假主题/语言按钮**：设置中心"时区/界面语言"标注"即将推出"，避免用户以为按钮失灵。
+- **暗色原生控件统一**：全局 `color-scheme: dark`；`type="range"` 新增 `.liquid-range` 液态滑块样式（emerald 渐变 thumb + 光晕）。
+- **总览页骨架加载**：任务加载期间显示 SkeletonCards 而非全 0 KPI。
+- **快捷键清单**：设置中心快捷键说明补全并标注已绑定（⌘K/N/Esc/?/）。
+
+#### 五、全局命令面板 + 键盘快捷键（新功能）
+- **`CommandPalette`**（新组件）：⌘K / Ctrl+K 唤起，支持页面跳转 + 新建任务等操作一键直达；模糊搜索（标题+关键词）；↑↓ 选择 + Enter 执行 + Esc 关闭；分组展示（导航/操作）。
+- **键盘快捷键体系**：`⌘K` 命令面板、`N` 新建任务、`/` 聚焦搜索、`Esc` 关闭、`?` 备选打开面板；输入框内不触发单字符快捷键。
+- 原 TopBar 的 ⌘K 弱实现（仅聚焦搜索）已移除，改为命令面板接管。
+
+#### 影响文件
+- 后端（8）：`auth.routes.ts` `server.ts` `ws.ts` `jwt.ts` `audit.routes.ts` `rateLimit.ts` `ai.routes.ts` `article.routes.ts`；新增依赖 `helmet`
+- 前端新增（4）：`ui/ConfirmDialog.tsx` `ui/Skeleton.tsx` `ui/EmptyState.tsx` `ui/CommandPalette.tsx`
+- 前端重构（3）：`ui/Toast.tsx` `ui/LiquidModal.tsx` `ui/StatusBadge.tsx` `ui/GlassCard.tsx`
+- 前端页面/组件（9）：`FileDocumentsPage` `TaskGroupList` `ScheduleManagementPage` `TopBar` `LoginPage` `ResetPasswordPage` `ProjectOverviewPage` `SettingsCenterPage` `App.tsx`；`index.css`（+range 样式/color-scheme/sweep 关键帧）
+
+---
+
 ## 2026-08-05（续）
 
 ### P6：标签库 + 任务清单 + 审计日志 + 批量操作 + 多项体验增强

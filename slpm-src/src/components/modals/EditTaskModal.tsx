@@ -3,6 +3,7 @@ import { Edit3, CheckCircle2, Trash2 } from 'lucide-react';
 import { Priority, TaskStatus } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { LiquidModal } from '@/components/ui/LiquidModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { TagPicker } from '@/components/modals/TagPicker';
 import { TagManageModal } from '@/components/modals/TagManageModal';
@@ -30,6 +31,8 @@ export const EditTaskModal: React.FC = () => {
   const [versionId, setVersionId] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
   const [error, setError] = useState('');
+  // P8：删除任务二次确认（替代原生 confirm）
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!editingTask) return;
@@ -77,9 +80,12 @@ export const EditTaskModal: React.FC = () => {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!editingTask) return;
-    if (!confirm(`确认删除任务 ${editingTask.id}（${editingTask.title}）吗？`)) return;
+    setDeleteConfirm(true);
+  };
+  const confirmDelete = async () => {
+    if (!editingTask) return;
     try {
       await deleteTask.mutateAsync(editingTask.id);
       setSelectedTask(null);
@@ -90,6 +96,7 @@ export const EditTaskModal: React.FC = () => {
   };
 
   return (
+    <>
     <LiquidModal
       open={open}
       onClose={() => setEditingTask(null)}
@@ -229,5 +236,16 @@ export const EditTaskModal: React.FC = () => {
       </form>
       <TagManageModal open={tagManageOpen} onClose={() => setTagManageOpen(false)} />
     </LiquidModal>
+    {/* P8：删除任务二次确认 */}
+    <ConfirmDialog
+      open={deleteConfirm}
+      onClose={() => setDeleteConfirm(false)}
+      onConfirm={confirmDelete}
+      variant="danger"
+      title={editingTask ? `删除任务 ${editingTask.id}？` : '删除任务？'}
+      description={editingTask ? `「${editingTask.title}」及其评论、活动记录将被永久删除，该操作不可恢复。` : ''}
+      confirmText="确认删除"
+    />
+    </>
   );
 };

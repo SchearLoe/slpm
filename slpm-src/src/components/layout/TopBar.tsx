@@ -30,6 +30,18 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // P8：通知铃铛抖动 —— 新通知到达（计数增加）时触发一次 shake 动画
+  const [bellShake, setBellShake] = useState(false);
+  const prevUnreadRef = useRef(unreadCount);
+  useEffect(() => {
+    if (unreadCount > prevUnreadRef.current) {
+      setBellShake(true);
+      const t = setTimeout(() => setBellShake(false), 700);
+      prevUnreadRef.current = unreadCount;
+      return () => clearTimeout(t);
+    }
+    prevUnreadRef.current = unreadCount;
+  }, [unreadCount]);
 
   // P4-1：跨模块搜索（任务 / 文件 / 知识库文章 / 成员）
   const searchResults = useMemo(() => {
@@ -53,10 +65,14 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   const totalHits = searchResults ? searchResults.tasks.length + searchResults.files.length + searchResults.articles.length + searchResults.members.length : 0;
 
-  // P4-1：⌘K / Ctrl+K 聚焦搜索框
+  // P8：⌘K 已由 MainLayout 的全局命令面板接管（原"聚焦搜索框"弱实现已移除）。
+  // 这里仅保留 / 键聚焦搜索框的便捷快捷键。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      const target = e.target as HTMLElement;
+      const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || target?.isContentEditable;
+      if (isTyping || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '/') {
         e.preventDefault();
         searchInputRef.current?.focus();
       }
@@ -210,10 +226,25 @@ export const TopBar: React.FC<TopBarProps> = ({
             onClick={() => setShowNotifications(true)}
             className="liquid-btn-ghost w-9 h-9 rounded-full flex items-center justify-center text-white/55 hover:text-white relative"
             title="消息通知"
+            aria-label={`消息通知，${unreadCount} 条未读`}
           >
-            <Bell className="w-4 h-4" />
+            <motion.span
+              animate={bellShake ? { rotate: [0, -18, 16, -12, 9, 0] } : {}}
+              transition={{ duration: 0.6, ease: 'easeInOut' }}
+              className="inline-flex"
+            >
+              <Bell className="w-4 h-4" />
+            </motion.span>
             {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]" />
+              <motion.span
+                key={unreadCount}
+                initial={{ scale: 0.4 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+                className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow-[0_0_10px_rgba(244,63,94,0.7)] border border-white/20"
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </motion.span>
             )}
           </button>
 

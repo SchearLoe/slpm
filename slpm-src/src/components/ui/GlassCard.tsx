@@ -36,9 +36,25 @@ export const GlassCard: React.FC<GlassCardProps> = ({
     red: 'shadow-[0_0_28px_rgba(239,68,68,0.18)]',
   };
 
+  // P8 无障碍：interactive 卡片有 onClick 时须键盘可达（Tab 聚焦 + Enter/Space 触发）
+  const isInteractive = variant === 'interactive' && typeof onClick === 'function';
+
   return (
     <motion.div
       onClick={onClick}
+      onKeyDown={
+        isInteractive
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-disabled={isInteractive && !onClick ? true : undefined}
       className={clsx(base, variants[variant], glow[glowColor], className)}
       {...props}
     >

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, Mail, Lock, User as UserIcon, ArrowRight, KeyRound } from 'lucide-react';
+import { Target, Mail, Lock, User as UserIcon, ArrowRight, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { useAuth, apiError } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 
@@ -19,6 +19,8 @@ export const LoginPage: React.FC = () => {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // P8：密码可见性切换
+  const [showPwd, setShowPwd] = useState(false);
   // P4-2：忘记密码 —— 结果提示（开发环境展示重置链接）
   const [forgotResult, setForgotResult] = useState<string | null>(null);
 
@@ -158,13 +160,21 @@ export const LoginPage: React.FC = () => {
               <Lock className="w-3.5 h-3.5 text-white/35 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
               <input
                 required
-                type="password"
+                type={showPwd ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="密码（至少 8 位，含字母和数字）"
                 minLength={8}
                 className={field}
               />
+              <button
+                type="button"
+                onClick={() => setShowPwd((v) => !v)}
+                aria-label={showPwd ? '隐藏密码' : '显示密码'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors"
+              >
+                {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           )}
 

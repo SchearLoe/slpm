@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { springSoft } from '@/lib/motion';
 import { ViewTransition } from '@/components/ui/PageTransition';
@@ -100,6 +101,8 @@ export const ScheduleManagementPage: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<ApiEvent | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
+  // P8：删除二次确认（替代"点删即删"）
+  const [pendingDelete, setPendingDelete] = useState<ApiEvent | null>(null);
 
   // 表单：用 datetime-local 字符串（YYYY-MM-DDTHH:mm）
   const emptyForm = () => ({
@@ -187,12 +190,21 @@ export const ScheduleManagementPage: React.FC = () => {
     }
   };
 
-  const deleteEvent = async (id: string) => {
+  // P8：删除改为先弹确认框
+  const deleteEvent = (evt: ApiEvent) => {
+    setMenuId(null);
+    setPendingDelete(evt);
+  };
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const id = pendingDelete.id;
     try {
       await deleteMut.mutateAsync(id);
       show('日程已删除');
     } catch (err) {
       show(apiError(err, '删除失败'));
+    } finally {
+      setPendingDelete(null);
     }
   };
 
@@ -219,6 +231,16 @@ export const ScheduleManagementPage: React.FC = () => {
   return (
     <div className="w-full h-full min-h-0 flex flex-col gap-3 pb-1">
       {ToastEl}
+      {/* P8：日程删除二次确认 */}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        variant="danger"
+        title="删除该日程？"
+        description={pendingDelete ? `「${pendingDelete.title}」将被删除，该操作不可恢复。` : ''}
+        confirmText="确认删除"
+      />
 
       {/* 顶栏工具 — 单行 */}
       <div className="flex items-center justify-between gap-3 flex-nowrap shrink-0 min-w-0 overflow-x-auto">
@@ -393,7 +415,7 @@ export const ScheduleManagementPage: React.FC = () => {
                         <button onClick={() => openEdit(evt)} className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] text-white/70 hover:bg-white/5">
                           <Pencil className="w-3 h-3" /> 编辑
                         </button>
-                        <button onClick={() => deleteEvent(evt.id)} className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] text-rose-300 hover:bg-rose-500/10">
+                        <button onClick={() => deleteEvent(evt)} className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] text-rose-300 hover:bg-rose-500/10">
                           <Trash2 className="w-3 h-3" /> 删除
                         </button>
                       </motion.div>

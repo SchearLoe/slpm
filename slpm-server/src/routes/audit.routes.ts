@@ -40,6 +40,9 @@ router.get(
     const where: Record<string, unknown> = {};
     if (scope === 'global') {
       if (!isSystemAdmin) throw new ApiError(403, '仅系统管理员可查看全局审计日志');
+      // P8 安全修复（MH1 IDOR）：全局视图下才允许用 workspaceId 查询参数做过滤。
+      // 工作区视图下该参数会被恶意用来跨区读取（覆盖 header 中的 workspaceId）。
+      if (d.workspaceId) where.workspaceId = d.workspaceId;
     } else {
       // 工作区视图：需 X-Workspace-Id + admin/pm 角色
       if (!req.headers['x-workspace-id']) throw new ApiError(403, '工作区视图需指定工作区');
@@ -52,12 +55,12 @@ router.get(
       if (membership.role !== 'admin' && membership.role !== 'pm') {
         throw new ApiError(403, '需要 admin/pm 权限查看工作区审计日志');
       }
+      // 强制锁定为已鉴权的 header 值，忽略查询参数（防 IDOR 跨区越权）
       where.workspaceId = req.headers['x-workspace-id'];
     }
 
     if (d.action) where.action = d.action;
     if (d.actorId) where.actorId = d.actorId;
-    if (d.workspaceId) where.workspaceId = d.workspaceId;
 
     const [logs, total] = await Promise.all([
       prisma.auditLog.findMany({

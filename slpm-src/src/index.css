@@ -30,6 +30,8 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overflow: hidden;
+    /* P8：原生表单控件（date/time/range/month）统一深色渲染，避免在黑底上显示白色亮块 */
+    color-scheme: dark;
   }
 
   * {
@@ -219,6 +221,43 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
     0 0 0 3px rgba(34, 197, 94, 0.12),
     0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+/* P8：原生 range 滑块统一液态玻璃风格（替代默认亮色/各浏览器不一致外观） */
+input[type="range"].liquid-range,
+.liquid-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+input[type="range"].liquid-range::-webkit-slider-thumb,
+.liquid-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #34d399, #10b981);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+  transition: transform 0.15s ease;
+}
+input[type="range"].liquid-range::-webkit-slider-thumb:hover,
+.liquid-range::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+input[type="range"].liquid-range::-moz-range-thumb,
+.liquid-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #34d399, #10b981);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
 }
 
 .liquid-btn-primary {
@@ -514,6 +553,11 @@
 @keyframes pulseGlow {
   0%, 100% { opacity: 0.35; transform: scale(1); }
   50% { opacity: 0.65; transform: scale(1.06); }
+}
+
+/* P8：骨架屏扫光（translateX 版，区别于 background-position 版 shimmer） */
+@keyframes sweep {
+  100% { transform: translateX(100%); }
 }
 
 .animate-pulse-glow {

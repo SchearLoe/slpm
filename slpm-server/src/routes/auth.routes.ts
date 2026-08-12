@@ -21,17 +21,32 @@ const router = Router();
 const AVATAR_DIR = path.resolve(env.uploadDir, 'avatars');
 fs.mkdirSync(AVATAR_DIR, { recursive: true });
 
+// P8 安全修复（H1 存储型 XSS）：mimetype → 安全扩展名白名单。
+// 关键：落盘扩展名完全由服务端 mimetype 决定，忽略客户端 originalname 的扩展名，
+// 防止"originalname=evil.html + mimetype=image/png"绕过 fileFilter 后落盘为 .html。
+const AVATAR_MIME_EXT: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+const AVATAR_ALLOWED_EXT = new Set(Object.values(AVATAR_MIME_EXT));
+
 const avatarUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, AVATAR_DIR),
     filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || '.png';
-      cb(null, `${crypto.randomUUID()}${ext}`);
+      // 扩展名由 mimetype 推导，绝不信任客户端 originalname
+      const safeExt = AVATAR_MIME_EXT[file.mimetype] ?? '.png';
+      cb(null, `${crypto.randomUUID()}${safeExt}`);
     },
   }),
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
   fileFilter: (_req, file, cb) => {
-    if (['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.mimetype)) {
+    const clientExt = path.extname(file.originalname).toLowerCase();
+    const mimeOk = file.mimetype in AVATAR_MIME_EXT;
+    // 双重校验：mimetype 与客户端扩展名都必须在白名单内且一致
+    if (mimeOk && AVATAR_ALLOWED_EXT.has(clientExt)) {
       cb(null, true);
     } else {
       cb(new ApiError(400, '仅支持 PNG/JPEG/WebP/GIF 图片'));
@@ -284,6 +299,15 @@ router.post(
 
 // ---- GET /api/auth/avatar/:file ----
 // 头像静态访问（无需鉴权，公开资源；文件名是 uuid 不可枚举）
+// P8 安全修复（H1）：扩展名→固定 Content-Type 白名单 + nosniff + inline，
+// 即使历史上落盘了 .html 也不会被浏览器当 HTML 渲染（纵深防御）。
+const AVATAR_CT_BY_EXT: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+};
 router.get(
   '/avatar/:file',
   (req, res) => {
@@ -292,8 +316,15 @@ router.get(
     if (!/^[\w.-]+$/.test(file)) {
       return res.status(400).json({ error: '非法文件名' });
     }
+    const ext = path.extname(file).toLowerCase();
+    const ct = AVATAR_CT_BY_EXT[ext];
+    // 仅允许头像扩展名白名单（拒绝 .html/.svg 等）
+    if (!ct) return res.status(404).json({ error: '头像不存在' });
     const abs = path.join(AVATAR_DIR, file);
     if (!fs.existsSync(abs)) return res.status(404).json({ error: '头像不存在' });
+    res.setHeader('Content-Type', ct);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', 'inline');
     res.sendFile(abs);
   },
 );
