@@ -167,7 +167,7 @@ router.post(
       },
     });
 
-    const token = signToken({ sub: user.id, email: user.email });
+    const token = signToken({ sub: user.id, email: user.email, tv: user.tokenVersion });
 
     // P4-1：首个用户（且数据库尚无任何工作区）→ 自动播种「演示项目」教程数据
     seedDemoForUser(user.id, user.name)
@@ -214,7 +214,7 @@ router.post(
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new ApiError(401, '邮箱或密码错误');
 
-    const token = signToken({ sub: user.id, email: user.email });
+    const token = signToken({ sub: user.id, email: user.email, tv: user.tokenVersion });
     res.json({ token, user: publicUser(user) });
 
     // P6-C：登录审计（best-effort）
@@ -348,7 +348,11 @@ router.post(
       return res.json({ ok: true, devResetUrl: null });
     }
 
-    const token = signToken({ sub: user.id, email: user.email, purpose: 'reset' }, '15m');
+    // P9 安全（L2）：生成一次性 nonce 写库，重置时校验后清空，防 15 分钟窗口内重放。
+    const nonce = crypto.randomUUID();
+    await prisma.user.update({ where: { id: user.id }, data: { resetNonce: nonce } });
+
+    const token = signToken({ sub: user.id, email: user.email, purpose: 'reset', nonce }, '15m');
     // P7 安全修复：devResetUrl 改为显式 env 开关（ENABLE_DEV_RESET_LINK），与 NODE_ENV 解耦
     // 避免生产环境误配 NODE_ENV=development 导致重置链接泄露
     const devResetUrl = env.enableDevResetLink
@@ -378,17 +382,33 @@ router.post(
     } catch {
       throw new ApiError(400, '重置链接无效或已过期，请重新申请');
     }
-    if (payload.purpose !== 'reset') {
+    if (payload.purpose !== 'reset' || !payload.nonce) {
       throw new ApiError(400, '重置链接无效或已过期，请重新申请');
+    }
+
+    // P9 安全（L2）：一次性 nonce 校验。已用过的 resetNonce 会被清空，重放即失败。
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { resetNonce: true },
+    });
+    if (!user || !user.resetNonce || user.resetNonce !== payload.nonce) {
+      throw new ApiError(400, '重置链接已使用或失效，请重新申请');
     }
 
     // P7 安全修复：bcrypt rounds 提升到 12（原 10 偏低）
     const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+    // P9 安全（H3）：bump tokenVersion 使所有历史会话立即失效；清空 resetNonce 防重放。
     await prisma.user.update({
       where: { id: payload.sub },
-      data: { passwordHash },
+      data: { passwordHash, tokenVersion: { increment: 1 }, resetNonce: null },
     });
     res.json({ ok: true });
+
+    // P9 安全（H5）：密码重置审计（安全敏感事件）
+    writeAudit(
+      { actorId: payload.sub, action: 'password_reset', target: `用户重置密码 (${payload.email})` },
+      req,
+    ).catch(() => {});
   }),
 );
 

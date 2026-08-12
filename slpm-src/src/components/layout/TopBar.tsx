@@ -277,7 +277,8 @@ export const TopBar: React.FC<TopBarProps> = ({
                   <button
                     onClick={() => {
                       setShowCreateMenu(false);
-                      navigate('/files');
+                      // P9-UX3：带 action 参数，文件页读取后自动开上传弹窗（原仅跳转列表页）
+                      navigate('/files?action=upload');
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] text-white/75 hover:bg-white/5 hover:text-white"
                   >
@@ -286,7 +287,8 @@ export const TopBar: React.FC<TopBarProps> = ({
                   <button
                     onClick={() => {
                       setShowCreateMenu(false);
-                      navigate('/schedule');
+                      // P9-UX3：带 action 参数，日程页读取后自动开创建弹窗
+                      navigate('/schedule?action=new');
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] text-white/75 hover:bg-white/5 hover:text-white"
                   >

@@ -4,6 +4,78 @@
 
 ---
 
+## 2026-08-12
+
+### P9：深度安全加固 + 会话可吊销 + 三态体验全面接入 + 交互诚实化
+
+本轮基于全栈安全审计与前端 UX 审计，集中修复 5 个高危越权/会话漏洞、补齐审计取证盲区，并把 P8 建好但未启用的 UI 基础设施（Skeleton/EmptyState）铺到全站，消除"加载中显示假空数据""原生 confirm 突兀""死按钮误导"等系统性体验缺陷。1 个数据库迁移，无破坏性 API 变更。
+
+#### 一、安全加固（后端，5 高危 + 5 中危 + 2 低危）
+
+**会话与认证**
+- **H3 会话可吊销（tokenVersion）**：`User` 新增 `tokenVersion`，写入 JWT；`requireAuth` 异步比对版本号 + 用户是否存在。**重置密码后所有历史 JWT 立即失效**（解决"重置后旧 token 仍 7 天有效"的接管窗口期）；顺带修复 L6（已删除/禁用用户 JWT 未过期仍可访问）。
+- **L2 重置 token 一次性**：`User` 新增 `resetNonce`，`forgot-password` 写入随机 nonce，`reset-password` 校验后清空——15 分钟窗口内重放即失效。
+- **H5 密码重置审计**：重置成功写 `password_reset` 审计日志（安全敏感事件留痕）。
+
+**越权与租户隔离**
+- **H1 工作区→产品线提权**：`POST /workspaces` 指定 `productId` 时校验调用者对该产品线有写权限（system_admin / 产品负责人 / 产品下项目的 po-admin）。原实现任意用户可把工作区挂到他人产品线下变 admin，进而越权读取/修改该产品所有项目数据（租户隔离被绕过）。
+- **H2 跨工作区 IDOR（依赖/父任务）**：create/update 的 `blockIds`、`parentId` 写入前校验全部属于当前工作区。原实现可引用其它租户任务，读回时泄露任务标题/状态。同时移除依赖写入的静默 `.catch`（错误不再被吞）。
+- **H4 指派人校验**：create/update 的 `assigneeId` 校验是当前工作区成员（防向非成员滥发通知 + 拉取其展示资料）。
+- **M1 销毁鉴权**：单任务 `DELETE` 需创建者本人或 admin/pm；批量删除需 admin/pm（原任何 dev/qa 可一键清空 200 条他人任务）。
+
+**审计取证覆盖（H5）**：补全 `writeAudit` 埋点——任务删除（`task_delete`）、批量操作（`batch_op` 含动作/数量）、AI 配置变更（`ai_config_update`）、产品线增改（`product_create/update`）、版本增删改（`version_create/update/delete`）。原仅 login/register/成员变更有审计，破坏性操作无痕。
+
+**其它加固**
+- **M3 WebSocket presence 隔离**：`presence:init` 只推送与当前用户「共享至少一个工作区」的在线成员（原推送全系统在线用户，泄露其它租户在线状态）。
+- **M2 文件版本归档事务**：上传覆盖归档 + 恢复版本改用 `$transaction`，避免半成功态导致版本历史错乱。
+- **M6 文件 nosniff**：download/preview 补 `X-Content-Type-Options: nosniff`；preview 对非图片/非 PDF 强制 `attachment`（纵深防御 MIME 嗅探执行）。
+- **M7 AI 错误脱敏**：`toApiError` 与流式错误不再把上游 `ECONNREFUSED`/DNS/TLS 原始 message 透传客户端（含 baseURL/拓扑），仅写服务端日志。
+- **L4 限流 IPv6**：`aiLimiter` 兜底用官方 `ipKeyGenerator`，消除 express-rate-limit 的 `ERR_ERL_KEY_GEN_IPV6` 启动校验告警。
+
+#### 二、加载/空/错误三态全面接入（UX1）
+
+P8 建好的 `Skeleton` / `EmptyState` 此前几乎未启用——全站"加载中"显示假空数据（KPI 全 0、看板全空列），误导用户以为工作区为空。
+
+- **KPICardsRow**：加载中显示 `SkeletonCards`（原四个 KPI 全 0）；KPI 详情空态升级为 `EmptyState` + 新建任务 CTA。
+- **TaskGroupList 看板**：加载中四列显示骨架（原每列"暂无任务"假空态）。
+- **AIAnalyticsPage**：新增加载骨架 + 错误态 `QueryError`（原 API 失败静默显示全 0 指标）。
+- **ProjectOverviewPage**：新增错误态 + 重试（原静默全 0 健康度）。
+- **ScheduleManagementPage**：日程列表加载中显示骨架（原误显"当日暂无日程"假空态）。
+- **TeamCollaborationPage**：成员加载中显示 `SkeletonCards`；空态升级为 `EmptyState` + 邀请成员 CTA。
+- **FileDocumentsPage**：文档空态升级为 `EmptyState` + 上传 CTA（区分"无文档"与"无匹配"）。
+- **KnowledgeBasePage**：正文加载中显示骨架（原"加载中…"纯文字）；空态升级为 `EmptyState` + 发布文章 CTA。
+- **AuditLogPanel**：加载骨架替代"加载中…"纯文字。
+
+#### 三、ConfirmDialog 全站迁移（UX2）
+
+清除剩余 5 处原生 `window.confirm()`（OS 风格白底蓝按钮，在液态玻璃界面突兀、不可自动化、不可聚焦）：
+- AISmartDetailPanel 评论删除
+- TeamCollaborationPage 移除成员
+- ProductManagementPage 移出产品线 / 删除版本
+- SettingsCenterPage 清除本地数据
+
+全部改为 `ConfirmDialog`（danger/warning 语义 + 提交中防误关）。**全站已无原生 confirm()。**
+
+#### 四、死按钮 / 误导性交互诚实化（UX3）
+- **分享按钮**：FileDocuments 原复制标题却提示"分享链接已复制"——改为诚实文案"已复制文档标题，可粘贴到站内消息分享"。
+- **知识库目录 TOC**：原 `cursor-default` 不可点击——Markdown 标题加稳定 id 锚点，TOC 项点击平滑滚动定位。
+- **智能详情搜索按钮**：原只 flash 假提示"已聚焦搜索"——改为复制任务深链 `/tasks/:id`，真实可用。
+- **TopBar 创建菜单**：原"快速文档/预约日程"只跳列表页——带 `?action=upload|new` 参数，对应页面 mount 后自动打开上传/创建弹窗。
+- **看板批量指派**：`setAssignee` 后端已接入但 UI 缺失——批量工具条补「指派给我」按钮；"+"按钮图标从 `LayoutGrid` 改为 `Plus`。
+
+#### 五、表单校验 + 设置诚实化（UX4）
+- **日程表单**：`handleSave` 增加结束时间 > 开始时间校验（原可创建倒序日程）；去掉假默认地点"线上会议室 Alpha"（原污染每条新建日程）。
+- **设置中心**：`Toggle` 增 `soon` 选项，对尚未生效的"桌面通知""两步验证 (2FA)""界面密度"禁用开关 + 标"即将推出"，避免用户以为按钮坏了。
+
+#### 影响文件
+- **后端（11）**：`schema.prisma` + 迁移 `20260812120000_p9_tokenversion_resetnonce`；`jwt.ts` `auth.ts(middleware)` `auth.routes.ts` `workspace.routes.ts` `task.routes.ts` `file.routes.ts` `ws.ts` `ai.routes.ts` `product.routes.ts` `product-version.routes.ts` `rateLimit.ts`
+- **前端新增/重构**：`Markdown.tsx`（导出 `headingSlug`）；其余为页面/组件增补加载态、空态、确认弹窗、参数解析
+- **前端页面/组件（12）**：`KPICardsRow` `TaskGroupList` `AIAnalyticsPage` `ProjectOverviewPage` `ScheduleManagementPage` `TeamCollaborationPage` `FileDocumentsPage` `KnowledgeBasePage` `AuditLogPanel` `AISmartDetailPanel` `ProductManagementPage` `SettingsCenterPage` `TopBar`
+
+**验证**：前后端 tsc 零错误；后端生产构建通过；前端生产构建通过；API 安全冒烟 21/24 通过（3 项为测试用户非 system_admin 无法读全局审计的预期 403，审计写入经 workspace 作用域验证存在 `batch_op`/`task_delete`/`password_reset`）。
+
+---
+
 ## 2026-08-11
 
 ### P8：安全加固 + 交互/视觉体验大升级 + 全局命令面板

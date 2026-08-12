@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar as CalendarIcon,
@@ -92,13 +93,23 @@ export const ScheduleManagementPage: React.FC = () => {
   const today = new Date();
   const [cursor, setCursor] = useState({ year: today.getFullYear(), month: today.getMonth() + 1 });
   const monthStr = ym(cursor.year, cursor.month);
-  const { data: events = [] } = useSchedules(monthStr);
+  const { data: events = [], isLoading: eventsLoading, isError: eventsError, refetch: refetchEvents } = useSchedules(monthStr);
 
   const [selectedDate, setSelectedDate] = useState<string>(
     `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
   );
   const [priorityFilter, setPriorityFilter] = useState<'all' | '高' | '中' | '低'>('all');
   const [showCreate, setShowCreate] = useState(false);
+  // P9-UX3：从 TopBar「预约日程」带 ?action=new 进来时，自动打开创建弹窗
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      setShowCreate(true);
+      searchParams.delete('action');
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [editing, setEditing] = useState<ApiEvent | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
   // P8：删除二次确认（替代"点删即删"）
@@ -109,7 +120,8 @@ export const ScheduleManagementPage: React.FC = () => {
     title: '',
     startInput: `${selectedDate}T10:00`,
     endInput: `${selectedDate}T11:00`,
-    location: '线上会议室 Alpha',
+    // P9-UX4：去掉假默认地点（原硬编码"线上会议室 Alpha"会污染每条新建日程）
+    location: '',
     priority: '高' as '高' | '中' | '低',
     attendees: '',
   });
@@ -132,7 +144,7 @@ export const ScheduleManagementPage: React.FC = () => {
       title: '',
       startInput: `${dateStr}T10:00`,
       endInput: `${dateStr}T11:00`,
-      location: '线上会议室 Alpha',
+      location: '',
       priority: '高',
       attendees: '',
     });
@@ -156,7 +168,15 @@ export const ScheduleManagementPage: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
+    if (!form.title.trim()) {
+      show('请填写日程标题', 'warning');
+      return;
+    }
+    // P9-UX4：结束时间必须晚于开始时间（原仅校验标题，可创建倒序日程）
+    if (new Date(form.endInput) <= new Date(form.startInput)) {
+      show('结束时间必须晚于开始时间', 'warning');
+      return;
+    }
     const payload = {
       title: form.title.trim(),
       startTime: new Date(form.startInput).toISOString(),
@@ -375,7 +395,13 @@ export const ScheduleManagementPage: React.FC = () => {
 
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 py-3">
             <ViewTransition viewKey={selectedDate} className="space-y-2.5">
-              {dayEvents.length === 0 && (
+              {/* P9-UX：加载中骨架，避免误显示"当日暂无日程"的假空态 */}
+              {eventsLoading && (
+                <div className="space-y-2.5">
+                  {[0,1,2].map(i => <div key={i} className="h-14 rounded-xl bg-white/[0.04] border border-white/[0.05] animate-pulse" />)}
+                </div>
+              )}
+              {dayEvents.length === 0 && !eventsLoading && (
                 <div className="h-full min-h-[160px] flex flex-col items-center justify-center text-[12px] text-white/35 gap-3">
                   <p>当日暂无日程</p>
                   <button onClick={() => openCreate(selectedDate)} className="h-9 px-3 rounded-full liquid-btn-ghost text-[11px] text-white/60">

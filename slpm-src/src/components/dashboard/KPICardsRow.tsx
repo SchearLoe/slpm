@@ -6,12 +6,19 @@ import { useAuth } from '@/context/AuthContext';
 import { useTasks } from '@/lib/queries';
 import { springSoft } from '@/lib/motion';
 import { LiquidModal } from '@/components/ui/LiquidModal';
+import { SkeletonCards } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export const KPICardsRow: React.FC<{ onCardClick?: (t: string) => void }> = ({ onCardClick }) => {
-  const { setSelectedTask } = useApp();
+  const { setSelectedTask, setIsNewTaskOpen } = useApp();
   const { user } = useAuth();
-  const { data: tasks = [] } = useTasks();
+  const { data: tasks = [], isLoading } = useTasks();
   const [open, setOpen] = useState<string | null>(null);
+
+  // P9-UX：加载中显示骨架屏，避免四个 KPI 全显示 0 误导用户以为工作区为空
+  if (isLoading) {
+    return <SkeletonCards cards={4} className="kpi-row" />;
+  }
 
   // 真实计数：从后端任务聚合（替代原 demo 写死的 12/28/56/3）
   const liveCompleted = tasks.filter((t) => t.status === '已完成').length;
@@ -104,7 +111,15 @@ export const KPICardsRow: React.FC<{ onCardClick?: (t: string) => void }> = ({ o
         }
       >
         <div className="space-y-2 max-h-[360px] overflow-y-auto">
-          {list.length === 0 && <div className="py-8 text-center text-[12px] text-white/35">当前列表为空，去创建第一个任务吧</div>}
+          {list.length === 0 && (
+            <EmptyState
+              compact
+              icon={<ClipboardList className="w-6 h-6" />}
+              title="当前列表为空"
+              description="这里还没有对应状态的任务，去任务页创建第一个吧"
+              action={{ label: '新建任务', onClick: () => { setOpen(null); setIsNewTaskOpen(true); } }}
+            />
+          )}
           {list.map((t) => (
             <button
               key={t.id}

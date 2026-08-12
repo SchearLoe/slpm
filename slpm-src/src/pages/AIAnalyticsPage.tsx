@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
+import { SkeletonCards, SkeletonRows } from '@/components/ui/Skeleton';
+import { QueryError } from '@/components/QueryError';
 import { useToast } from '@/components/ui/Toast';
 import { springSoft } from '@/lib/motion';
 import { ViewTransition } from '@/components/ui/PageTransition';
@@ -147,7 +149,7 @@ function exportTasksCSV(tasks: TaskItem[]) {
 
 export const AIAnalyticsPage: React.FC = () => {
   const { show, ToastEl } = useToast();
-  const { data: tasks = [] } = useTasks();
+  const { data: tasks = [], isLoading, isError, refetch } = useTasks();
   const { currentRole } = useApp();
   const roleCfg = getRoleConfig(currentRole);
   const isReadOnly = roleCfg.readOnlyPages.includes('analytics');
@@ -306,6 +308,29 @@ export const AIAnalyticsPage: React.FC = () => {
       show(apiError(err, '发送失败'));
     }
   };
+
+  // P9-UX：错误态优先（API 失败时不再静默显示全 0 指标）
+  if (isError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <QueryError onRetry={() => refetch()} message="分析数据加载失败，请检查网络或工作区状态" />
+      </div>
+    );
+  }
+
+  // P9-UX：加载中显示骨架屏，避免 KPI/漏斗/图表全显示 0 或空（误导为"无数据"）
+  if (isLoading) {
+    return (
+      <div className="w-full h-full min-h-0 flex flex-col gap-3.5">
+        <SkeletonCards cards={4} />
+        <div className="liquid-glass rounded-[20px] p-4"><SkeletonRows rows={4} /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="liquid-glass rounded-[20px] p-4"><SkeletonRows rows={3} /></div>
+          <div className="liquid-glass rounded-[20px] p-4"><SkeletonRows rows={3} /></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full min-h-0 flex flex-col gap-3.5 pb-1">

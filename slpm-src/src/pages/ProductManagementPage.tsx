@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { useToast } from '@/components/ui/Toast';
 import { springSoft } from '@/lib/motion';
@@ -215,6 +216,9 @@ export const ProductManagementPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentProduct, products, workspaces, setCurrentWorkspace, setCurrentProduct } = useApp();
   const [tab, setTab] = useState<'requirements' | 'backlog' | 'roadmap' | 'versions' | 'team'>('requirements');
+  // P9-UX2：取消关联 / 删除版本的二次确认（替代原生 window.confirm）
+  const [pendingUnlink, setPendingUnlink] = useState<{ wsId: string; wsName: string } | null>(null);
+  const [pendingDelVersion, setPendingDelVersion] = useState<ProductVersion | null>(null);
 
   const productId = currentProduct?.id;
   // P3：产品级写权限（po/admin）
@@ -373,8 +377,7 @@ export const ProductManagementPage: React.FC = () => {
     }
   };
 
-  const confirmUnlink = async (wsId: string, wsName: string) => {
-    if (!window.confirm(`确认将「${wsName}」移出产品线？任务数据不受影响。`)) return;
+  const confirmUnlink = async (wsId: string) => {
     try {
       await unlinkWs.mutateAsync(wsId);
       show('已取消关联');
@@ -383,10 +386,9 @@ export const ProductManagementPage: React.FC = () => {
     }
   };
 
-  const confirmDeleteVersion = async (v: ProductVersion) => {
-    if (!window.confirm(`确认删除版本「${v.name}」？关联任务将解除版本归属。`)) return;
+  const confirmDeleteVersion = async (versionId: string) => {
     try {
-      await deleteVersion.mutateAsync(v.id);
+      await deleteVersion.mutateAsync(versionId);
       show('版本已删除');
     } catch (err) {
       show(apiError(err, '删除失败'));
@@ -700,7 +702,7 @@ export const ProductManagementPage: React.FC = () => {
                             <button onClick={() => setVersionModal({ open: true, initial: v })} className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors" title="编辑">
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
-                            <button onClick={() => confirmDeleteVersion(v)} className="p-1.5 rounded-lg hover:bg-rose-400/15 text-white/40 hover:text-rose-300 transition-colors" title="删除">
+                            <button onClick={() => setPendingDelVersion(v)} className="p-1.5 rounded-lg hover:bg-rose-400/15 text-white/40 hover:text-rose-300 transition-colors" title="删除">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -913,6 +915,28 @@ export const ProductManagementPage: React.FC = () => {
 
       {/* 版本任务列表 */}
       <VersionTasksModal productId={productId ?? ''} versionId={versionTasksFor} versions={versions} onClose={() => setVersionTasksFor(null)} onOpenTask={(t) => { setVersionTasksFor(null); setTaskDetail(t); }} />
+
+      {/* P9-UX2：取消关联项目二次确认 */}
+      <ConfirmDialog
+        open={!!pendingUnlink}
+        onClose={() => setPendingUnlink(null)}
+        onConfirm={async () => { if (pendingUnlink) await confirmUnlink(pendingUnlink.wsId); }}
+        variant="warning"
+        title="移出产品线？"
+        description={<>确认将「{pendingUnlink?.wsName}」移出当前产品线？任务数据不受影响，仅解除归属关系。</>}
+        confirmText="移出"
+      />
+
+      {/* P9-UX2：删除版本二次确认 */}
+      <ConfirmDialog
+        open={!!pendingDelVersion}
+        onClose={() => setPendingDelVersion(null)}
+        onConfirm={async () => { if (pendingDelVersion) await confirmDeleteVersion(pendingDelVersion.id); }}
+        variant="danger"
+        title="删除版本？"
+        description={<>确认删除版本「{pendingDelVersion?.name}」？关联到此版本的任务将解除版本归属，任务本身不会被删除。</>}
+        confirmText="删除"
+      />
     </div>
   );
 };

@@ -21,6 +21,7 @@ import {
   Camera,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/Toast';
@@ -49,23 +50,30 @@ function Toggle({
   onChange,
   label,
   desc,
+  soon = false,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
   desc: string;
+  /** P9-UX4：标记该选项尚未真正生效（禁用开关 + 显示"即将推出"），避免用户误以为按钮坏了 */
+  soon?: boolean;
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-black/25 border border-white/[0.05] cursor-pointer hover:border-white/10 transition-colors">
+    <label className={`flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-black/25 border border-white/[0.05] transition-colors ${soon ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-white/10'}`}>
       <div className="min-w-0">
-        <div className="text-[12px] font-bold text-white">{label}</div>
+        <div className="text-[12px] font-bold text-white flex items-center gap-1.5">
+          {label}
+          {soon && <SoonTag />}
+        </div>
         <div className="text-[11px] text-white/40 mt-0.5 leading-relaxed">{desc}</div>
       </div>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
-        onClick={() => onChange(!checked)}
+        disabled={soon}
+        onClick={() => !soon && onChange(!checked)}
         className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${
           checked ? 'bg-emerald-500/80' : 'bg-white/10'
         }`}
@@ -114,6 +122,8 @@ export const SettingsCenterPage: React.FC = () => {
     }
   }, [aiConfigQ.data]);
   const [tab, setTab] = useState<SettingsTab>('appearance');
+  // P9-UX2：清除本地数据二次确认（替代原生 confirm）
+  const [pendingClearCache, setPendingClearCache] = useState(false);
 
   // appearance
   const [density, setDensity] = useState<'comfortable' | 'compact' | 'spacious'>('comfortable');
@@ -377,8 +387,8 @@ export const SettingsCenterPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[11px] font-semibold text-white/45">界面密度</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <label className="text-[11px] font-semibold text-white/45 flex items-center gap-1.5">界面密度 <SoonTag /></label>
+                  <div className="grid grid-cols-3 gap-2 opacity-60 pointer-events-none">
                     {([
                       ['compact', '紧凑'],
                       ['comfortable', '舒适'],
@@ -583,7 +593,7 @@ export const SettingsCenterPage: React.FC = () => {
           {tab === 'notify' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                <Toggle checked={desktopNotify} onChange={setDesktopNotify} label="桌面通知" desc="浏览器/系统级推送" />
+                <Toggle checked={desktopNotify} onChange={setDesktopNotify} label="桌面通知" desc="浏览器/系统级推送" soon />
                 <Toggle checked={mailNotify} onChange={setMailNotify} label="邮件通知" desc="重要任务与评审结论邮件" />
                 <Toggle checked={mention} onChange={(v) => { setMention(v); persistNotify({ notifyMention: v }); }} label="@ 提及" desc="被协作成员提及时即时通知（保存到账号）" />
                 <Toggle checked={assignNotify} onChange={(v) => { setAssignNotify(v); persistNotify({ notifyAssign: v }); }} label="任务指派" desc="新任务指派给我时通知（保存到账号）" />
@@ -694,7 +704,7 @@ export const SettingsCenterPage: React.FC = () => {
           {tab === 'privacy' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                <Toggle checked={twoFA} onChange={setTwoFA} label="两步验证 (2FA)" desc="登录时需验证器动态码" />
+                <Toggle checked={twoFA} onChange={setTwoFA} label="两步验证 (2FA)" desc="登录时需验证器动态码" soon />
                 <Toggle checked={sessionAlert} onChange={setSessionAlert} label="异地登录提醒" desc="新设备/新地区登录即时通知" />
                 <Toggle checked={analyticsShare} onChange={setAnalyticsShare} label="匿名使用分析" desc="帮助改进产品体验，不含隐私内容" />
                 <Toggle checked={publicProfile} onChange={setPublicProfile} label="公开个人主页" desc="工作区内其他成员可查看完整资料" />
@@ -757,12 +767,7 @@ export const SettingsCenterPage: React.FC = () => {
                 <SectionTitle icon={Trash2} title="危险操作" />
                 <p className="text-[11px] text-white/40">清除本地登录态与缓存并退出登录。云端数据不受影响。</p>
                 <button
-                  onClick={() => {
-                    if (confirm('确认清除本地缓存并退出登录？')) {
-                      localStorage.clear();
-                      logout();
-                    }
-                  }}
+                  onClick={() => setPendingClearCache(true)}
                   className="h-10 px-4 rounded-full bg-rose-500/15 border border-rose-400/30 text-rose-300 text-[12px] font-semibold"
                 >
                   清除本地数据并退出
@@ -773,6 +778,17 @@ export const SettingsCenterPage: React.FC = () => {
           </ViewTransition>
         </div>
       </div>
+
+      {/* P9-UX2：清除本地数据二次确认 */}
+      <ConfirmDialog
+        open={pendingClearCache}
+        onClose={() => setPendingClearCache(false)}
+        onConfirm={() => { localStorage.clear(); logout(); }}
+        variant="danger"
+        title="清除本地数据并退出？"
+        description="将清除浏览器本地缓存与登录态并退出登录。云端数据不受影响，重新登录即可恢复。"
+        confirmText="确认清除"
+      />
     </div>
   );
 };

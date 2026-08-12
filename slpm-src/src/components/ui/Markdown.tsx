@@ -6,11 +6,24 @@ import React from 'react';
  * 支持：标题 #、粗体 **、斜体 *、行内代码 `、链接 []()、
  * 无序/有序列表、引用 >、分隔线 ---、段落。
  * 不引入第三方库，避免包体积膨胀；对知识库文章正文足够。
+ *
+ * P9-UX3：标题渲染时附加稳定 id（slug），供知识库目录跳转锚定。
  */
 export const Markdown: React.FC<{ content: string; className?: string }> = ({ content, className = '' }) => {
   const blocks = parseBlocks(content);
   return <div className={className}>{blocks.map((b, i) => renderBlock(b, i))}</div>;
 };
+
+/** 把标题文本转为 URL 友好的锚点 id（中文保留，去标点/空格转连字符） */
+export function headingSlug(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[\s.,;:!?'"`~()（）【】《》<>]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60) || 'heading';
+}
 
 type Block =
   | { type: 'h1' | 'h2' | 'h3'; text: string }
@@ -138,11 +151,11 @@ function renderInline(text: string): React.ReactNode[] {
 function renderBlock(b: Block, i: number): React.ReactNode {
   switch (b.type) {
     case 'h1':
-      return <h1 key={i} className="text-[16px] font-bold text-white mt-3 mb-1.5">{renderInline(b.text)}</h1>;
+      return <h1 key={i} id={headingSlug(b.text)} className="text-[16px] font-bold text-white mt-3 mb-1.5 scroll-mt-20">{renderInline(b.text)}</h1>;
     case 'h2':
-      return <h2 key={i} className="text-[14px] font-bold text-white mt-2.5 mb-1">{renderInline(b.text)}</h2>;
+      return <h2 key={i} id={headingSlug(b.text)} className="text-[14px] font-bold text-white mt-2.5 mb-1 scroll-mt-20">{renderInline(b.text)}</h2>;
     case 'h3':
-      return <h3 key={i} className="text-[13px] font-semibold text-white/90 mt-2 mb-1">{renderInline(b.text)}</h3>;
+      return <h3 key={i} id={headingSlug(b.text)} className="text-[13px] font-semibold text-white/90 mt-2 mb-1 scroll-mt-20">{renderInline(b.text)}</h3>;
     case 'p':
       return <p key={i} className="my-1.5 leading-relaxed">{renderInline(b.text)}</p>;
     case 'ul':

@@ -54,12 +54,51 @@ router.post(
     const parsed = createWsSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
 
+    // P9 安全（H1）：若指定 productId，必须校验调用者对该产品线有写权限，
+    // 否则任意用户可把工作区挂到他人产品线下、自身变 admin，进而通过产品级
+    // 视图越权读取/修改该产品所有项目的数据（租户隔离被绕过）。
+    // 合法路径：system_admin，或产品负责人，或该产品下某项目的 po/admin。
+    let productId: string | null = parsed.data.productId ?? null;
+    if (productId) {
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: {
+          ownerId: true,
+          workspaces: { select: { id: true } },
+        },
+      });
+      if (!product) throw new ApiError(404, '指定的产品线不存在');
+
+      // role 不在 JWT 里，单独取一次（requireAuth 已确认用户存在）
+      const me = await prisma.user.findUnique({
+        where: { id: req.user!.sub },
+        select: { role: true },
+      });
+      const isSystemAdmin = me?.role === 'system_admin';
+      const isOwner = product.ownerId === req.user!.sub;
+      let canManage = isSystemAdmin || isOwner;
+      if (!canManage && product.workspaces.length > 0) {
+        const myMembership = await prisma.workspaceMember.findFirst({
+          where: {
+            userId: req.user!.sub,
+            workspaceId: { in: product.workspaces.map((w) => w.id) },
+            role: { in: ['po', 'admin'] },
+          },
+          select: { id: true },
+        });
+        canManage = !!myMembership;
+      }
+      if (!canManage) {
+        throw new ApiError(403, '无权将工作区挂到该产品线下（需产品负责人或产品下项目的 PO/管理员）');
+      }
+    }
+
     const slug = `${makeSlug(parsed.data.name)}_${Date.now().toString(36)}`;
     const workspace = await prisma.workspace.create({
       data: {
         name: parsed.data.name,
         slug,
-        productId: parsed.data.productId ?? null,
+        productId,
         members: {
           create: { userId: req.user!.sub, role: 'admin' },
         },

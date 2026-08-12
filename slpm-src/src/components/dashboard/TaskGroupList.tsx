@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ArrowUpDown, LayoutGrid, Clock, CheckSquare, Square, X, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ArrowUpDown, Plus, Clock, CheckSquare, Square, X, AlertTriangle } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useApp } from '@/context/AppContext';
@@ -14,12 +14,13 @@ import { useTasks, useUpdateTask, useTags, useBatchTasks, type BatchAction } fro
 import { apiError } from '@/lib/api';
 import { getRoleConfig } from '@/lib/roleConfig';
 import { tagColorClass } from '@/lib/tagColors';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 
 export const TaskGroupList: React.FC = () => {
   const { selectedTask, setSelectedTask, setIsNewTaskOpen, currentRole } = useApp();
   const { user } = useAuth();
   const { show, ToastEl } = useToast();
-  const { data: tasks = [] } = useTasks();
+  const { data: tasks = [], isLoading } = useTasks();
   const { data: tags = [] } = useTags();
   const updateTask = useUpdateTask();
   const batchTasks = useBatchTasks();
@@ -239,7 +240,7 @@ export const TaskGroupList: React.FC = () => {
             className="liquid-pill p-1.5 text-white/45 hover:text-white shrink-0"
             title="添加任务"
           >
-            <LayoutGrid className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5" />
           </motion.button>
         </div>
       </div>
@@ -259,6 +260,8 @@ export const TaskGroupList: React.FC = () => {
                 <BatchBtn label="完成" onClick={() => runBatch('setStatus', { status: '已完成' })} />
                 <BatchBtn label="进行中" onClick={() => runBatch('setStatus', { status: '进行中' })} />
                 <BatchBtn label="高优" onClick={() => runBatch('setPriority', { priority: '高' })} />
+                {/* P9-UX3：批量指派给我（原 setAssignee 已接入但 UI 缺失，现在补上） */}
+                <BatchBtn label="指派给我" onClick={() => runBatch('setAssignee', { assigneeId: user?.id })} />
                 <BatchBtn label="删除" danger onClick={() => runBatch('delete')} />
                 <button onClick={exitSelectMode} className="liquid-btn-ghost w-7 h-7 rounded-md flex items-center justify-center text-white/50 hover:text-white">
                   <X className="w-3.5 h-3.5" />
@@ -270,7 +273,17 @@ export const TaskGroupList: React.FC = () => {
       </AnimatePresence>
 
       <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-0.5">
-        {phases.map((phase, pi) => {
+        {/* P9-UX：加载中显示骨架屏，避免四列看板全显示「暂无任务」的假空态 */}
+        {isLoading ? (
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+            {phases.map((p) => (
+              <div key={p} className="liquid-glass rounded-[18px] p-3">
+                <SkeletonRows rows={3} />
+              </div>
+            ))}
+          </div>
+        ) : (
+        <>{phases.map((phase, pi) => {
           const groupTasks = filteredTasks.filter((t) => t.phase === phase);
           const isCollapsed = collapsedGroups[phase];
           // P4-2：阶段工时小计（真实预估工时汇总）
@@ -444,7 +457,8 @@ export const TaskGroupList: React.FC = () => {
               </AnimatePresence>
             </motion.div>
           );
-        })}
+        })}</>
+        )}
       </div>
     </div>
   );

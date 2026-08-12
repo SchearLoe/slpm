@@ -15,8 +15,8 @@ SLPM 是一个全栈项目管理系统，前端基于高保真 Liquid Glass 交�
 | 前端数据 | TanStack Query + axios · socket.io-client |
 | 前端路由 | React Router v6 |
 | 后端 | Node.js · Express · TypeScript · socket.io |
-| ORM | Prisma 5 · PostgreSQL 16（14 个迁移） |
-| 认证 | 邮箱密码 + bcrypt + JWT · 忘记密码（重置 token） |
+| ORM | Prisma 5 · PostgreSQL 16（15 个迁移） |
+| 认证 | 邮箱密码 + bcrypt + JWT · 忘记密码（一次性重置 token）· 会话可吊销（tokenVersion） |
 | AI | OpenAI 兼容 chat/completions（流式 SSE） |
 | 文件存储 | multer 本地磁盘 · workspace 隔离 · 头像上传 |
 | 实时推送 | socket.io（JWT 认证 + workspace 房间 + 在线状态） |
@@ -51,6 +51,7 @@ SLPM 是一个全栈项目管理系统，前端基于高保真 Liquid Glass 交�
 | P5-1 | 安全与健壮性增强：限流/上传校验/错误边界/分页/共享枚举 |
 | P6 | 标签库（CRUD+颜色+筛选）· 任务清单 Checklist（完成度汇总）· 审计日志（系统级操作记录）· 任务批量操作 · 任务详情独立路由 · 评论编辑删除 · 筛选 URL 持久化 · 通知排序+类型筛选 · 日程导出 ICS · 知识库 Markdown 渲染 · 文件视图切换 · 看板 WIP 限制 · 统一头像组件 |
 | P8 | 安全加固（头像XSS/Helmet/审计IDOR/WS鉴权/AI限流/JWT算法钉/fail-fast 启动）· 全局命令面板 ⌘K · 键盘快捷键（N/Esc/?/）· UI 基础设施（ConfirmDialog/Toast多变体/Skeleton/EmptyState/LiquidModal焦点陷阱/GlassCard键盘可达）· 交互修复（Hooks崩溃/看板测试验证阶段/删除二次确认/通知数字徽章+抖动/操作高亮/密码可见性+强度）· 视觉打磨（StatusBadge枚举判色/燃尽图拉伸/Q2动态/暗色控件/range滑块）|
+| P9 | 深度安全加固（工作区→产品线提权/依赖跨区IDOR/指派校验/销毁鉴权/审计覆盖/AI错误脱敏/WS presence隔离/文件nosniff+事务）· 会话可吊销（tokenVersion，重置密码即失效）+ 重置 token 一次性 · 三态体验全面接入（Skeleton/EmptyState/QueryError 铺满 9 页）· ConfirmDialog 全站迁移（清零原生 confirm）· 交互诚实化（分享/搜索死按钮/TOC跳转/创建菜单直达/批量指派）· 表单校验 + 设置未接入项标记 |
 
 ---
 
@@ -118,7 +119,7 @@ D:\VibeCode\xmgl\
 │   │   └── lib/            # prisma · jwt · crypto · notify · ws · seed
 │   ├── prisma/
 │   │   ├── schema.prisma   # 数据模型
-│   │   └── migrations/     # 13 个迁移
+│   │   └── migrations/     # 15 个迁移
 │   └── package.json
 ├── e2e\               # Playwright 冒烟测试
 ├── playwright.config.ts

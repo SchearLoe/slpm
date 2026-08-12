@@ -3,8 +3,11 @@ import { motion } from 'framer-motion';
 import { Users, UserCheck, MessageSquare, UserMinus } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { QueryError } from '@/components/QueryError';
+import { SkeletonCards } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { useApp } from '@/context/AppContext';
 import { springSoft } from '@/lib/motion';
@@ -71,6 +74,8 @@ export const TeamCollaborationPage: React.FC = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<WsRole>('dev');
   const [msgText, setMsgText] = useState('');
+  // P9-UX2：成员移除二次确认（替代原生 window.confirm）
+  const [pendingRemove, setPendingRemove] = useState<{ userId: string; name: string } | null>(null);
 
   // P4-1：真实站内信发送
   const handleSendMsg = async () => {
@@ -97,11 +102,10 @@ export const TeamCollaborationPage: React.FC = () => {
     }
   };
 
-  const handleRemove = async (userId: string, name: string) => {
-    if (!window.confirm(`确定将 ${name} 移出当前工作区？`)) return;
+  const handleRemove = async (userId: string) => {
     try {
       await removeMut.mutateAsync(userId);
-      show(`已移除 ${name}`);
+      show('已移除成员');
     } catch (err) {
       show(apiError(err, '移除失败'));
     }
@@ -151,6 +155,12 @@ export const TeamCollaborationPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+        {/* P9-UX：加载中骨架屏（原实现空白，用户以为没成员） */}
+        {isLoading && (
+          <div className="col-span-full">
+            <SkeletonCards cards={3} />
+          </div>
+        )}
         {members.map((member, idx) => {
           const stats = inProgressByUser.get(member.userId) ?? { inProgress: 0, completed: 0 };
           // P4-1：负荷饱和度 = 在办任务数相对最高者的归一化（真实数据，替代 ×10% 公式）
@@ -225,7 +235,7 @@ export const TeamCollaborationPage: React.FC = () => {
                   </button>
                   {canManage && (
                     <button
-                      onClick={() => handleRemove(member.userId, member.name)}
+                      onClick={() => setPendingRemove({ userId: member.userId, name: member.name })}
                       className="liquid-btn-ghost w-9 h-9 rounded-xl flex items-center justify-center text-white/60 hover:text-rose-300"
                       title="移除成员"
                     >
@@ -238,8 +248,13 @@ export const TeamCollaborationPage: React.FC = () => {
           );
         })}
         {members.length === 0 && !isLoading && (
-          <div className="col-span-full py-16 text-center text-[12px] text-white/35">
-            当前工作区暂无其他成员，邀请同事加入协作吧
+          <div className="col-span-full">
+            <EmptyState
+              icon={<Users className="w-7 h-7" />}
+              title="当前工作区暂无其他成员"
+              description="邀请同事加入，开始协同管理任务、日程与文件吧"
+              action={canManage ? { label: '邀请新成员', onClick: () => setInviteOpen(true) } : undefined}
+            />
           </div>
         )}
       </div>
@@ -303,6 +318,19 @@ export const TeamCollaborationPage: React.FC = () => {
           className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white resize-none"
         />
       </LiquidModal>
+
+      {/* P9-UX2：移除成员二次确认 */}
+      <ConfirmDialog
+        open={!!pendingRemove}
+        onClose={() => setPendingRemove(null)}
+        onConfirm={async () => {
+          if (pendingRemove) await handleRemove(pendingRemove.userId);
+        }}
+        variant="danger"
+        title="移除成员？"
+        description={<>确定将「{pendingRemove?.name}」移出当前工作区？该成员将无法再访问此工作区的任务、日程与文件。</>}
+        confirmText="移除"
+      />
     </div>
   );
 };

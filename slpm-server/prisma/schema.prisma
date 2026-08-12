@@ -21,6 +21,10 @@ model User {
   avatar       String?  // 首字母自动生成（如 BR），第二期支持真实头像
   role         String   @default("成员") // 权限标识：system_admin | 成员（P7 安全修复：仅受信路径可写，禁止用户自改）
   jobTitle     String?  // 职位展示字段（如 "前端工程师"，用户可自行修改；与权限 role 物理分离）
+  // P9 安全（H3）：令牌版本号。重置密码 / 主动注销时 +1，使所有已签发 JWT 立即失效。
+  tokenVersion Int      @default(0)
+  // P9 安全（L2）：当前有效的密码重置 nonce（一次性）。reset-password 校验后清空，防重放。
+  resetNonce   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

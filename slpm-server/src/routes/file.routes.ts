@@ -129,30 +129,32 @@ router.post(
 
     let record;
     if (existing) {
-      // 归档旧版本 → 更新现有记录为最新文件
-      await prisma.fileVersion.create({
-        data: {
-          fileId: existing.id,
-          version: existing.currentVersion,
-          originalName: existing.originalName,
-          mimeType: existing.mimeType,
-          size: existing.size,
-          storagePath: existing.storagePath,
-        },
-      });
-      record = await prisma.fileRecord.update({
-        where: { id: existing.id },
-        data: {
-          title: title !== originalName ? title : existing.title, // 保留非默认标题
-          originalName,
-          mimeType: file.mimetype,
-          size: file.size,
-          storagePath,
-          category,
-          tags,
-          currentVersion: existing.currentVersion + 1,
-        },
-        include: { uploader: { select: { id: true, name: true, avatar: true } } },
+      // P9 安全（M2）：归档旧版本 + 更新记录必须在同一事务内，避免半成功态导致版本历史错乱
+      record = await prisma.$transaction(async (tx) => {
+        await tx.fileVersion.create({
+          data: {
+            fileId: existing.id,
+            version: existing.currentVersion,
+            originalName: existing.originalName,
+            mimeType: existing.mimeType,
+            size: existing.size,
+            storagePath: existing.storagePath,
+          },
+        });
+        return tx.fileRecord.update({
+          where: { id: existing.id },
+          data: {
+            title: title !== originalName ? title : existing.title, // 保留非默认标题
+            originalName,
+            mimeType: file.mimetype,
+            size: file.size,
+            storagePath,
+            category,
+            tags,
+            currentVersion: existing.currentVersion + 1,
+          },
+          include: { uploader: { select: { id: true, name: true, avatar: true } } },
+        });
       });
       // 旧磁盘文件保留不删（版本历史可下载）
     } else {
@@ -192,8 +194,9 @@ router.get(
       throw new ApiError(404, '文件已被移除');
     }
     // 用原始文件名作为下载名，设置正确的 content-type
+    // P9 安全（M6）：补 nosniff，防止浏览器对受污染 mimeType 做 MIME 嗅探执行脚本
     res.download(absPath, record.originalName, {
-      headers: { 'Content-Type': record.mimeType },
+      headers: { 'Content-Type': record.mimeType, 'X-Content-Type-Options': 'nosniff' },
     });
   }),
 );
@@ -215,8 +218,11 @@ router.get(
       throw new ApiError(404, '文件已被移除');
     }
     // 内联显示：Content-Disposition: inline + 正确 mimeType，浏览器自动渲染图片/PDF
+    // P9 安全（M6）：补 nosniff；非图片/非 PDF 强制 attachment，防 .html/.svg 在源站执行
+    const safeInline = /^(image\/|application\/pdf)/.test(record.mimeType || '');
     res.setHeader('Content-Type', record.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', safeInline ? 'inline' : 'attachment');
     res.setHeader('Content-Length', record.size.toString());
     fs.createReadStream(absPath).pipe(res);
   }),
@@ -301,27 +307,29 @@ router.post(
     });
     if (!version) throw new ApiError(404, '版本不存在');
 
-    // 归档当前版本 → 用选中版本覆盖
-    await prisma.fileVersion.create({
-      data: {
-        fileId: record.id,
-        version: record.currentVersion,
-        originalName: record.originalName,
-        mimeType: record.mimeType,
-        size: record.size,
-        storagePath: record.storagePath,
-      },
-    });
-    const updated = await prisma.fileRecord.update({
-      where: { id: record.id },
-      data: {
-        originalName: version.originalName,
-        mimeType: version.mimeType,
-        size: version.size,
-        storagePath: version.storagePath,
-        currentVersion: record.currentVersion + 1,
-      },
-      include: { uploader: { select: { id: true, name: true, avatar: true } } },
+    // P9 安全（M2）：归档当前版本 + 用选中版本覆盖，同一事务保证版本历史一致
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.fileVersion.create({
+        data: {
+          fileId: record.id,
+          version: record.currentVersion,
+          originalName: record.originalName,
+          mimeType: record.mimeType,
+          size: record.size,
+          storagePath: record.storagePath,
+        },
+      });
+      return tx.fileRecord.update({
+        where: { id: record.id },
+        data: {
+          originalName: version.originalName,
+          mimeType: version.mimeType,
+          size: version.size,
+          storagePath: version.storagePath,
+          currentVersion: record.currentVersion + 1,
+        },
+        include: { uploader: { select: { id: true, name: true, avatar: true } } },
+      });
     });
     res.json({ file: updated });
   }),

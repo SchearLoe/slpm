@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { requireProductAccess, requireProductRole } from '../middleware/product.js';
 import { ApiError } from '../middleware/error.js';
+import { writeAudit } from '../lib/audit.js';
 
 const router = Router();
 
@@ -82,6 +83,12 @@ router.post(
       });
 
     res.status(201).json({ version: serialize(version) });
+
+    // P9 安全（H5）：版本创建审计
+    writeAudit(
+      { actorId: req.user!.sub, action: 'version_create', target: `创建版本「${d.name}」`, workspaceId: null, metadata: { productId: req.product!.productId } },
+      req,
+    ).catch(() => {});
   }),
 );
 
@@ -132,6 +139,12 @@ router.patch(
       });
 
     res.json({ version: serialize(version) });
+
+    // P9 安全（H5）：版本更新审计
+    writeAudit(
+      { actorId: req.user!.sub, action: 'version_update', target: `更新版本「${serialize(version).name}」（字段：${Object.keys(data).join('/') || '无'}）`, workspaceId: null, metadata: { productId: req.product!.productId, versionId: req.params.vid } },
+      req,
+    ).catch(() => {});
   }),
 );
 
@@ -142,12 +155,18 @@ router.delete(
   requireProductAccess,
   requireProductRole('po', 'admin'),
   asyncHandler(async (req, res) => {
-    await prisma.productVersion.findFirstOrThrow({
+    const existing = await prisma.productVersion.findFirstOrThrow({
       where: { id: req.params.vid, productId: req.product!.productId },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     await prisma.productVersion.delete({ where: { id: req.params.vid } });
     res.json({ ok: true });
+
+    // P9 安全（H5）：版本删除审计
+    writeAudit(
+      { actorId: req.user!.sub, action: 'version_delete', target: `删除版本「${existing.name}」`, workspaceId: null, metadata: { productId: req.product!.productId, versionId: req.params.vid } },
+      req,
+    ).catch(() => {});
   }),
 );
 

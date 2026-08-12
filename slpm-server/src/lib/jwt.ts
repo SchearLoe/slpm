@@ -5,6 +5,10 @@ export interface JwtPayload {
   sub: string; // userId
   email: string;
   purpose?: 'reset'; // P4-2：密码重置 token 标记
+  // P9 安全（H3）：令牌版本号。requireAuth 会与 User.tokenVersion 比对，不一致即拒绝（重置密码后旧 token 失效）。
+  tv?: number;
+  // P9 安全（L2）：重置 token 的一次性 nonce。reset-password 校验后清空 User.resetNonce，重放即失效。
+  nonce?: string;
 }
 
 export function signToken(payload: JwtPayload, expiresIn?: string): string {

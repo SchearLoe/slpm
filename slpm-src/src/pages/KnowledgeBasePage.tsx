@@ -3,8 +3,10 @@ import { BookOpen, Search, Folder, FileText, Star, ChevronRight, Plus, Share2, B
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
-import { Markdown } from '@/components/ui/Markdown';
+import { Markdown, headingSlug } from '@/components/ui/Markdown';
 import { QueryError } from '@/components/QueryError';
+import { SkeletonRows } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { useArticles, useCreateArticle, useToggleArticleStar } from '@/lib/queries';
 import { apiError } from '@/lib/api';
@@ -133,12 +135,15 @@ export const KnowledgeBasePage: React.FC = () => {
               <span className="text-emerald-300 font-semibold flex items-center gap-1">阅读全文 <ChevronRight className="w-3.5 h-3.5" /></span>
             </div>
           </GlassCard>
+        ) : isLoading ? (
+          <GlassCard className="p-6"><SkeletonRows rows={6} /></GlassCard>
         ) : (
-          <GlassCard className="p-8 flex flex-col items-center justify-center text-center gap-2">
-            <BookOpen className="w-8 h-8 text-white/20" />
-            <p className="text-[13px] text-white/50">{isLoading ? '加载中…' : '知识库还是空的'}</p>
-            <p className="text-[11px] text-white/30">点击右上角「发布文章」沉淀第一篇最佳实践</p>
-          </GlassCard>
+          <EmptyState
+            icon={<BookOpen className="w-7 h-7" />}
+            title="知识库还是空的"
+            description="沉淀团队的最佳实践、设计规范与技术文档，点击右上角发布第一篇"
+            action={{ label: '发布文章', onClick: () => setCreateOpen(true) }}
+          />
         )}
 
         <div className="grid grid-cols-2 gap-3">
@@ -193,10 +198,11 @@ export const KnowledgeBasePage: React.FC = () => {
                 </div>
               </div>
             ))}
-            {filtered.length === 0 && (
-              <div className="py-10 text-center text-[12px] text-white/35">
-                {isLoading ? '加载中…' : '无匹配文章'}
-              </div>
+            {filtered.length === 0 && !isLoading && (
+              <div className="py-10 text-center text-[12px] text-white/35">无匹配文章</div>
+            )}
+            {filtered.length === 0 && isLoading && (
+              <div className="py-2"><SkeletonRows rows={3} /></div>
             )}
           </div>
         </GlassCard>
@@ -231,14 +237,25 @@ export const KnowledgeBasePage: React.FC = () => {
         }
       >
         <div className="space-y-3 text-[13px] text-white/65 leading-relaxed max-h-[60vh] overflow-y-auto pr-1">
-          {/* P6-E6：自动提取标题作为目录 */}
+          {/* P6-E6：自动提取标题作为目录（P9-UX3：可点击锚定跳转） */}
           {openArticle && extractToc(openArticle.body).length > 0 && (
             <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
               <div className="text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wide">目录</div>
               <ul className="space-y-0.5">
                 {extractToc(openArticle.body).map((h, idx) => (
-                  <li key={idx} className="text-[11px] text-white/55 hover:text-emerald-300 cursor-default truncate" style={{ paddingLeft: `${(h.level - 1) * 12}px` }}>
-                    {h.text}
+                  <li key={idx}>
+                    <a
+                      href={`#${headingSlug(h.text)}`}
+                      onClick={(e) => {
+                        // 容器内滚动：直接 scrollIntoView，避免触发路由跳转
+                        e.preventDefault();
+                        document.getElementById(headingSlug(h.text))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                      className="block text-[11px] text-white/55 hover:text-emerald-300 cursor-pointer truncate transition-colors"
+                      style={{ paddingLeft: `${(h.level - 1) * 12}px` }}
+                    >
+                      {h.text}
+                    </a>
                   </li>
                 ))}
               </ul>

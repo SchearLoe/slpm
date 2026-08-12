@@ -6,6 +6,7 @@ import { useAuditLogs } from '@/lib/queries';
 import { useAuth } from '@/context/AuthContext';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { Avatar } from '@/components/ui/Avatar';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { QueryError } from '@/components/QueryError';
 
 // 审计动作 → 中文标签 + 颜色
@@ -24,6 +25,8 @@ const ACTION_META: Record<string, { label: string; cls: string }> = {
   version_delete: { label: '删除版本', cls: 'bg-rose-500/15 text-rose-200 border-rose-400/30' },
   ai_config_update: { label: 'AI 配置变更', cls: 'bg-violet-500/15 text-violet-200 border-violet-400/30' },
   batch_op: { label: '批量操作', cls: 'bg-slate-500/15 text-slate-200 border-slate-400/30' },
+  password_reset: { label: '密码重置', cls: 'bg-fuchsia-500/15 text-fuchsia-200 border-fuchsia-400/30' },
+  task_delete: { label: '删除任务', cls: 'bg-rose-500/15 text-rose-200 border-rose-400/30' },
 };
 
 function actionMeta(action: string) {
@@ -117,7 +120,8 @@ export const AuditLogPanel: React.FC = () => {
       {/* 日志列表 */}
       <div className="liquid-glass rounded-2xl overflow-hidden">
         {isLoading ? (
-          <div className="px-4 py-8 text-[12px] text-white/40 text-center">加载中…</div>
+          // P9-UX：骨架屏替代"加载中…"纯文字
+          <div className="p-4"><SkeletonRows rows={4} /></div>
         ) : logs.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <ScrollText className="w-8 h-8 text-white/15 mx-auto mb-2" />

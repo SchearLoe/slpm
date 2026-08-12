@@ -7,6 +7,8 @@ import { requireSystemAdmin } from '../middleware/admin.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { ApiError } from '../middleware/error.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
+import { writeAudit } from '../lib/audit.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -121,6 +123,17 @@ router.put(
       data,
     });
     res.json({ config: maskConfig(updated) });
+
+    // P9 安全（H5）：AI 配置变更（可能轮换 API Key / 改 baseURL）属安全敏感事件，留审计
+    writeAudit(
+      {
+        actorId: req.user!.sub,
+        action: 'ai_config_update',
+        target: `更新 AI 配置（字段：${Object.keys(data).join('/') || '无变更'}）`,
+        metadata: { fields: Object.keys(data) },
+      },
+      req,
+    ).catch(() => {});
   }),
 );
 
@@ -278,8 +291,10 @@ router.post(
       recordUsage(req.user!.sub, req.workspace!.id, 'suggest-stream', usage);
       res.write(`data: ${JSON.stringify({ done: true, confidence: 80 })}\n\n`);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '未知错误';
-      res.write(`data: ${JSON.stringify({ error: msg.slice(0, 200) })}\n\n`);
+      // P9 安全（M7）：上游错误细节仅写日志，给客户端返回固定文案（防泄露 baseURL/拓扑）
+      const raw = e instanceof Error ? `${e.name}: ${e.message}` : '未知错误';
+      logger.warn(`[ai/stream] 失败：${raw.slice(0, 300)}`);
+      res.write(`data: ${JSON.stringify({ error: 'AI 服务暂不可用，请稍后重试' })}\n\n`);
     } finally {
       res.end();
     }
@@ -488,7 +503,10 @@ function toApiError(e: unknown, fallbackMsg: string): ApiError {
   if (e instanceof Error) {
     // AbortError（超时）
     if (e.name === 'AbortError') return new ApiError(504, 'AI 请求超时（30s）');
-    return new ApiError(502, `${fallbackMsg}: ${e.message.slice(0, 200)}`);
+    // P9 安全（M7）：上游错误（ECONNREFUSED / DNS / TLS 等）的原始 message 可能包含
+    // 配置的 baseURL、内网拓扑、端口等敏感信息，仅写服务端日志，不透传客户端。
+    logger.warn(`[ai] 调用失败：${e.name}: ${e.message.slice(0, 300)}`);
+    return new ApiError(502, fallbackMsg);
   }
   return new ApiError(500, fallbackMsg);
 }

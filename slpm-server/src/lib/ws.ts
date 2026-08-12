@@ -65,7 +65,7 @@ export function setupSocket(server: SocketServer) {
     }
   });
 
-  server.on('connection', (socket) => {
+  server.on('connection', async (socket) => {
     const userId = socket.data.userId as string;
     logger.log(`[ws] 用户 ${userId} 已连接 (${socket.id})`);
 
@@ -74,9 +74,21 @@ export function setupSocket(server: SocketServer) {
     broadcastPresence(userId, userWorkspaces.get(userId) ?? []);
 
     // 新连接加入时，把当前在线成员推给 TA（进入页面即知谁在线）
-    const onlineList = [...getOnlineUsers()].filter((u) => u !== userId);
-    if (onlineList.length > 0) {
-      socket.emit('presence:init', { online: onlineList });
+    // P9 安全（M3）：只推送与当前用户「共享至少一个工作区」的在线成员，
+    // 原实现 getOnlineUsers() 返回全系统在线用户，泄露其它租户的在线状态。
+    const myWsIds = userWorkspaces.get(userId) ?? [];
+    let scopedOnline: string[] = [];
+    if (myWsIds.length > 0) {
+      const coworkerIds = await prisma.workspaceMember.findMany({
+        where: { workspaceId: { in: myWsIds }, userId: { not: userId } },
+        select: { userId: true },
+        distinct: ['userId'],
+      });
+      const onlineSet = getOnlineUsers();
+      scopedOnline = coworkerIds.map((m) => m.userId).filter((id) => onlineSet.has(id));
+    }
+    if (scopedOnline.length > 0) {
+      socket.emit('presence:init', { online: scopedOnline });
     }
 
     socket.on('disconnect', () => {

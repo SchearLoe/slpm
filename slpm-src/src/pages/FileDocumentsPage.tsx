@@ -1,10 +1,12 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FileText, Search, UploadCloud, Download, Eye, Share2, MoreHorizontal, Paperclip, Pencil, Check, X, LayoutGrid, List as ListIcon } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { QueryError } from '@/components/QueryError';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { FileRecord } from '@/types';
 import { useFiles, useUploadFile, useDeleteFile, useRenameFile, useFilePreviewUrl, downloadFile } from '@/lib/queries';
@@ -35,6 +37,16 @@ export const FileDocumentsPage: React.FC = () => {
   };
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
+  // P9-UX3：从 TopBar「快速文档」带 ?action=upload 进来时，自动打开上传弹窗
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('action') === 'upload') {
+      setShowUpload(true);
+      searchParams.delete('action');
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [menuId, setMenuId] = useState<string | null>(null);
   // P8：删除二次确认（替代之前"点删即删"的误删风险）
   const [pendingDelete, setPendingDelete] = useState<FileRecord | null>(null);
@@ -248,11 +260,12 @@ export const FileDocumentsPage: React.FC = () => {
                       </button>
                       <button
                         onClick={() => {
+                          // P9-UX3：诚实化——当前无公开分享链接，复制标题用于在站内/IM 中引用
                           navigator.clipboard?.writeText(file.title);
-                          show('分享链接已复制');
+                          show('已复制文档标题，可粘贴到站内消息分享');
                         }}
                         className="liquid-btn-ghost w-8 h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white"
-                        title="分享"
+                        title="复制标题分享"
                       >
                         <Share2 className="w-4 h-4" />
                       </button>
@@ -288,7 +301,14 @@ export const FileDocumentsPage: React.FC = () => {
                 </GlassCard>
               ))}
             </div>
-            {filteredFiles.length === 0 && <div className="py-16 text-center text-[12px] text-white/35">暂无匹配文档</div>}
+            {filteredFiles.length === 0 && (
+              <EmptyState
+                icon={<FileText className="w-7 h-7" />}
+                title={files.length === 0 ? '工作区还没有文档' : '暂无匹配文档'}
+                description={files.length === 0 ? '上传第一份文档，团队共享设计稿、需求与资料' : '试试调整搜索关键词或分类筛选条件'}
+                action={files.length === 0 ? { label: '上传文档', onClick: () => setShowUpload(true) } : undefined}
+              />
+            )}
           </>
         )}
       </div>

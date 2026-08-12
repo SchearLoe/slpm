@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 /**
  * P5-1：速率限制中间件。
@@ -29,11 +29,13 @@ export const apiLimiter = rateLimit({
 // P8 安全修复（MH2）：AI 调用按 token 计费且昂贵，须按用户独立限流。
 // keyGenerator 用 req.user.sub（JWT 已解析），避免多用户共享 IP 配额被一人耗尽。
 // 每个登录用户每分钟最多 10 次 AI 调用（suggest + stream 合并计算）。
+// P9 健壮性（L4）：未登录兜底用官方 ipKeyGenerator，正确归一化 IPv6，消除
+// express-rate-limit 的 ERR_ERL_KEY_GEN_IPV6 启动校验告警。
 export const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => (req.user?.sub ? `ai:${req.user.sub}` : req.ip ?? 'anon'),
+  keyGenerator: (req) => (req.user?.sub ? `ai:${req.user.sub}` : ipKeyGenerator(req.ip ?? 'anon')),
   message: { error: 'AI 请求过于频繁，每分钟最多 10 次，请稍后再试' },
 });

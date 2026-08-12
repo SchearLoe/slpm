@@ -19,6 +19,7 @@ import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { springSoft } from '@/lib/motion';
 import { LiquidModal } from '@/components/ui/LiquidModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Avatar } from '@/components/ui/Avatar';
 import { TaskChecklist } from '@/components/dashboard/TaskChecklist';
 import { useCompleteTask, useUpdateTask, useComments, useCreateComment, useUpdateComment, useDeleteComment, useTaskActivity, streamAiSuggest } from '@/lib/queries';
@@ -69,6 +70,8 @@ export const AISmartDetailPanel: React.FC = () => {
   // P6-E2：评论编辑状态
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentDraft, setEditCommentDraft] = useState('');
+  // P9-UX2：评论删除二次确认（替代原生 confirm）
+  const [pendingDeleteComment, setPendingDeleteComment] = useState<string | null>(null);
   const [showAiDetail, setShowAiDetail] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [toast, setToast] = useState('');
@@ -157,11 +160,16 @@ export const AISmartDetailPanel: React.FC = () => {
                   <h3 className="text-[13px] font-bold text-white tracking-wide">智能详情</h3>
                 </div>
                 <button
-                  onClick={() => flash(`已聚焦搜索：${task.id}`)}
+                  onClick={() => {
+                    // P9-UX3：原按钮只 flash 假提示（"已聚焦搜索"）。改为真实有用——复制任务深链
+                    const url = `${window.location.origin}/tasks/${task.id}`;
+                    navigator.clipboard?.writeText(url);
+                    flash('任务链接已复制，可分享给同事');
+                  }}
                   className="liquid-btn-ghost w-8 h-8 rounded-full flex items-center justify-center text-white/40 hover:text-white"
-                  title="搜索此任务"
+                  title="复制任务链接"
                 >
-                  <Search className="w-3.5 h-3.5" />
+                  <ArrowUpRight className="w-3.5 h-3.5" />
                 </button>
               </div>
 
@@ -343,9 +351,7 @@ export const AISmartDetailPanel: React.FC = () => {
                                     </button>
                                   )}
                                   <button
-                                    onClick={() => {
-                                      if (confirm('删除这条评论？')) deleteComment.mutate(c.id);
-                                    }}
+                                    onClick={() => setPendingDeleteComment(c.id)}
                                     className="text-rose-300/50 hover:text-rose-300"
                                     title="删除"
                                   >
@@ -608,6 +614,17 @@ export const AISmartDetailPanel: React.FC = () => {
           )}
         </div>
       </LiquidModal>
+
+      {/* P9-UX2：评论删除二次确认 */}
+      <ConfirmDialog
+        open={!!pendingDeleteComment}
+        onClose={() => setPendingDeleteComment(null)}
+        onConfirm={() => { if (pendingDeleteComment) deleteComment.mutate(pendingDeleteComment); }}
+        variant="danger"
+        title="删除这条评论？"
+        description="评论删除后无法恢复。"
+        confirmText="删除"
+      />
     </>
   );
 };

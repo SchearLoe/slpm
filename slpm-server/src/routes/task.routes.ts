@@ -5,8 +5,38 @@ import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { requireWorkspace } from '../middleware/workspace.js';
 import { ApiError } from '../middleware/error.js';
 import { notifyMentions, notifyAssignment } from '../lib/notify.js';
+import { writeAudit } from '../lib/audit.js';
 
 const router = Router();
+
+// P9 安全（H2/H4）：校验一组任务 id 是否全部属于当前工作区（防跨租户通过 parentId/blockIds
+// 建立引用从而窃取其它工作区任务标题/状态）。返回通过校验的合法 id 列表。
+async function assertTasksInWorkspace(ids: string[], workspaceId: string): Promise<void> {
+  if (ids.length === 0) return;
+  const found = await prisma.task.findMany({
+    where: { id: { in: ids }, workspaceId },
+    select: { id: true },
+  });
+  if (found.length !== new Set(ids).size) {
+    throw new ApiError(400, '依赖或父任务不存在，或不在当前工作区');
+  }
+}
+
+// P9 安全（H4）：校验指派人是否当前工作区成员（防向非成员滥发通知 / 拉取其展示资料）。
+// assigneeId 为 null 表示取消指派（合法）；self 永远合法。
+async function assertAssigneeInWorkspace(assigneeId: string | null, workspaceId: string, selfId: string): Promise<void> {
+  if (!assigneeId || assigneeId === selfId) return;
+  const m = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId: assigneeId } },
+    select: { userId: true },
+  });
+  if (!m) throw new ApiError(400, '目标负责人不是当前工作区成员');
+}
+
+// P9 安全（M1）：判断当前用户能否销毁该任务（创建者本人 或 工作区 admin/pm）。
+function canDestroyTask(ownerId: string, wsRole: string, userId: string): boolean {
+  return ownerId === userId || wsRole === 'admin' || wsRole === 'pm';
+}
 
 // P1-1：任务变更字段的中文标签，用于活动流 detail 文案
 const FIELD_LABELS: Record<string, string> = {
@@ -142,6 +172,13 @@ router.post(
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
     const d = parsed.data;
 
+    // P9 安全（H2）：父任务与阻塞依赖必须属于当前工作区，防跨租户引用窃取任务标题/状态。
+    if (d.parentId) await assertTasksInWorkspace([d.parentId], req.workspace!.id);
+    if (d.blockIds.length > 0) await assertTasksInWorkspace(d.blockIds, req.workspace!.id);
+    // P9 安全（H4）：指派人必须是当前工作区成员（默认指派给自己除外）。
+    const assigneeId = d.assigneeId ?? req.user!.sub;
+    await assertAssigneeInWorkspace(assigneeId, req.workspace!.id, req.user!.sub);
+
     const task = await prisma.task.create({
       data: {
         title: d.title,
@@ -163,7 +200,7 @@ router.post(
       include: { assignee: { select: { id: true, name: true, avatar: true, role: true } } },
     });
 
-    // P1-6：写入阻塞依赖
+    // P1-6：写入阻塞依赖（P9：上面已校验全部属于当前工作区，错误不再静默吞掉）
     if (d.blockIds.length > 0) {
       await prisma.taskDependency.createMany({
         data: d.blockIds.map((depId) => ({
@@ -171,7 +208,7 @@ router.post(
           dependsOnTaskId: depId,
         })),
         skipDuplicates: true,
-      }).catch(() => {});
+      });
     }
 
     // P1-1：写「创建任务」活动（失败仅丢日志，不影响主流程）
@@ -197,6 +234,18 @@ router.patch(
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, '参数校验失败', parsed.error.flatten());
     const d = parsed.data;
+
+    // P9 安全（H2）：父任务 / 阻塞依赖更新前校验工作区归属
+    if (d.parentId !== undefined && d.parentId) {
+      await assertTasksInWorkspace([d.parentId], req.workspace!.id);
+    }
+    if (d.blockIds !== undefined) {
+      await assertTasksInWorkspace(d.blockIds, req.workspace!.id);
+    }
+    // P9 安全（H4）：指派人变更需校验工作区成员身份
+    if (d.assigneeId !== undefined) {
+      await assertAssigneeInWorkspace(d.assigneeId, req.workspace!.id, req.user!.sub);
+    }
 
     const data: Record<string, unknown> = {};
     if (d.title !== undefined) data.title = d.title;
@@ -257,14 +306,14 @@ router.patch(
       }
     }
 
-    // P1-6：同步阻塞依赖（先删后建，简单实现）
+    // P1-6：同步阻塞依赖（先删后建；P9：依赖 id 已在上方校验工作区归属，错误不再静默吞掉）
     if (d.blockIds !== undefined) {
-      await prisma.taskDependency.deleteMany({ where: { taskId: task.id } }).catch(() => {});
+      await prisma.taskDependency.deleteMany({ where: { taskId: task.id } });
       if (d.blockIds.length > 0) {
         await prisma.taskDependency.createMany({
           data: d.blockIds.map((depId) => ({ taskId: task.id, dependsOnTaskId: depId })),
           skipDuplicates: true,
-        }).catch(() => {});
+        });
       }
     }
 
@@ -292,13 +341,28 @@ router.patch(
 );
 
 // ---- DELETE /api/tasks/:id ----
+// P9 安全（M1）：销毁鉴权 —— 仅创建者本人或工作区 admin/pm 可删，防普通成员误删/恶意清空他人任务。
 router.delete(
   '/:id',
   requireAuth,
   requireWorkspace,
   asyncHandler(async (req, res) => {
-    await prisma.task.delete({ where: { id: req.params.id, workspaceId: req.workspace!.id } });
+    const existing = await prisma.task.findFirst({
+      where: { id: req.params.id, workspaceId: req.workspace!.id },
+      select: { id: true, ownerId: true, title: true },
+    });
+    if (!existing) throw new ApiError(404, '任务不存在');
+    if (!canDestroyTask(existing.ownerId, req.workspace!.role, req.user!.sub)) {
+      throw new ApiError(403, '仅任务创建者或管理员/项目经理可删除任务');
+    }
+    await prisma.task.delete({ where: { id: existing.id } });
     res.json({ ok: true });
+
+    // P9 安全（H5）：任务删除审计
+    writeAudit(
+      { actorId: req.user!.sub, action: 'task_delete', target: `删除任务「${existing.title}」`, workspaceId: req.workspace!.id },
+      req,
+    ).catch(() => {});
   }),
 );
 
@@ -328,7 +392,16 @@ router.post(
     const where = { id: { in: ids }, workspaceId: wsId };
 
     if (d.action === 'delete') {
+      // P9 安全（M1）：批量删除属高危操作，仅 admin/pm 可执行（防普通成员一键清空 200 条）
+      if (req.workspace!.role !== 'admin' && req.workspace!.role !== 'pm') {
+        throw new ApiError(403, '批量删除任务需管理员或项目经理权限');
+      }
       const r = await prisma.task.deleteMany({ where });
+      // P9 安全（H5）：批量操作审计
+      writeAudit(
+        { actorId: req.user!.sub, action: 'batch_op', target: `批量删除 ${r.count} 个任务`, workspaceId: wsId, metadata: { action: 'delete', count: r.count } },
+        req,
+      ).catch(() => {});
       res.json({ ok: true, affected: r.count });
       return;
     }
@@ -350,6 +423,16 @@ router.post(
     else throw new ApiError(400, '批量操作参数不完整');
 
     const r = await prisma.task.updateMany({ where, data });
+    // P9 安全（H5）：批量操作审计（写类操作均留痕）
+    const actionLabel = { setStatus: '改状态', setPriority: '改优先级', setAssignee: '改负责人', setPhase: '改阶段' }[d.action] ?? d.action;
+    const detail = d.action === 'setStatus' ? d.status
+      : d.action === 'setPriority' ? d.priority
+      : d.action === 'setAssignee' ? (d.assigneeId ?? '取消指派')
+      : d.action === 'setPhase' ? d.phase : '';
+    writeAudit(
+      { actorId: req.user!.sub, action: 'batch_op', target: `批量${actionLabel} ${r.count} 个任务（${detail ?? ''}）`, workspaceId: wsId, metadata: { action: d.action, count: r.count } },
+      req,
+    ).catch(() => {});
     res.json({ ok: true, affected: r.count });
   }),
 );

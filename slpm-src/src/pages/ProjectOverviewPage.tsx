@@ -5,6 +5,7 @@ import { BarChart3, CheckCircle2, AlertTriangle, Users, Zap, ShieldCheck, PieCha
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { SkeletonCards } from '@/components/ui/Skeleton';
+import { QueryError } from '@/components/QueryError';
 import { useToast } from '@/components/ui/Toast';
 import { springSoft } from '@/lib/motion';
 import { ViewTransition } from '@/components/ui/PageTransition';
@@ -24,7 +25,7 @@ const PHASE_COLOR: Record<string, string> = {
 
 export const ProjectOverviewPage: React.FC = () => {
   const { show, ToastEl } = useToast();
-  const { data: tasks = [], isLoading } = useTasks();
+  const { data: tasks = [], isLoading, isError, refetch } = useTasks();
   const navigate = useNavigate();
   const { currentRole } = useApp();
   const roleCfg = getRoleConfig(currentRole);
@@ -126,6 +127,15 @@ export const ProjectOverviewPage: React.FC = () => {
       })),
     [stats],
   );
+
+  // P9-UX：错误态 —— 总览数据加载失败时给重试入口，不再静默显示全 0 健康度
+  if (isError) {
+    return (
+      <div className="w-full min-h-full flex items-center justify-center">
+        <QueryError onRetry={() => refetch()} message="总览数据加载失败，请检查网络或工作区状态" />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-full space-y-4 pb-4">

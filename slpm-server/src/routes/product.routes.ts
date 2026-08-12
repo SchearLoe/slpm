@@ -5,6 +5,7 @@ import { asyncHandler, requireAuth } from '../middleware/auth.js';
 import { requireProductAccess, requireProductRole } from '../middleware/product.js';
 import { ApiError } from '../middleware/error.js';
 import { ROLE_RANK } from '../lib/constants.js';
+import { writeAudit } from '../lib/audit.js';
 
 const router = Router();
 
@@ -94,6 +95,12 @@ router.post(
       data: { name: parsed.data.name, slug, description: parsed.data.description, ownerId: req.user!.sub },
     });
     res.status(201).json({ product: { ...product, workspaceCount: 0, versionCount: 0, role: 'admin' } });
+
+    // P9 安全（H5）：产品线创建审计
+    writeAudit(
+      { actorId: req.user!.sub, action: 'product_create', target: `创建产品线「${parsed.data.name}」` },
+      req,
+    ).catch(() => {});
   }),
 );
 
@@ -153,6 +160,12 @@ router.patch(
       data: parsed.data,
     });
     res.json({ product });
+
+    // P9 安全（H5）：产品线更新审计
+    writeAudit(
+      { actorId: req.user!.sub, action: 'product_update', target: `更新产品线「${product.name}」（字段：${Object.keys(parsed.data).join('/') || '无'}）` },
+      req,
+    ).catch(() => {});
   }),
 );
 

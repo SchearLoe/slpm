@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { verifyToken, JwtPayload } from '../lib/jwt.js';
+import { prisma } from '../lib/prisma.js';
 import { ApiError } from './error.js';
 
 // 扩展 Request 类型，挂载当前用户
@@ -34,7 +35,11 @@ export function asyncHandler(fn: AsyncRoute): RequestHandler {
 
 // JWT 验证中间件 —— 从 Authorization: Bearer <token> 提取并校验
 // P7 安全修复：拒绝 purpose!=='access' 的 token（reset token 不能当登录 token 用）
-export function requireAuth(req: Request, _res: Response, next: NextFunction) {
+// P9 安全修复（H3 + L6）：异步比对 User.tokenVersion ——
+//   1) 重置密码会 bump tokenVersion，所有历史 JWT 立即失效；
+//   2) 用户被删/禁用后（findUnique 返回 null）即使 JWT 未过期也拒绝。
+// 一次 findUnique 走主键索引，成本可接受，换来会话可吊销能力。
+export async function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     return next(new ApiError(401, '未登录，请先认证'));
@@ -46,6 +51,15 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
     // 登录 token 不带 purpose（undefined）；reset token 带 purpose='reset'，此处拒绝。
     if (payload.purpose !== undefined) {
       return next(new ApiError(401, '该凭证类型不能用于此操作'));
+    }
+    // P9（H3 + L6）：校验令牌版本号与用户是否存在
+    const u = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { tokenVersion: true },
+    });
+    if (!u) return next(new ApiError(401, '账号不存在或已被移除'));
+    if (payload.tv !== u.tokenVersion) {
+      return next(new ApiError(401, '登录状态已失效，请重新登录'));
     }
     req.user = payload;
     next();
