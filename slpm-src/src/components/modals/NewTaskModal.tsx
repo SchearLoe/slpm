@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, CheckCircle2, Sparkles } from 'lucide-react';
+import { Plus, CheckCircle2 } from 'lucide-react';
 import { Priority, TaskItem } from '@/types';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
@@ -174,28 +174,28 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
           </div>
         )}
 
-        <div>
-          <label className="block text-[11px] text-white/40 mb-1.5">截止时间</label>
-          <input
-            type="datetime-local"
-            className={`${field} [color-scheme:dark]`}
-            value={deadlineInput}
-            onChange={(e) => setDeadlineInput(e.target.value)}
-          />
-        </div>
-
-        {/* P4-2：预估工时 */}
-        <div>
-          <label className="block text-[11px] text-white/40 mb-1.5">预估工时（小时，用于燃尽图与负荷统计）</label>
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            value={estimatedHours}
-            onChange={(e) => setEstimatedHours(e.target.value)}
-            placeholder="如 8"
-            className={field}
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] text-white/40 mb-1.5">截止时间</label>
+            <input
+              type="datetime-local"
+              className={`${field} [color-scheme:dark]`}
+              value={deadlineInput}
+              onChange={(e) => setDeadlineInput(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] text-white/40 mb-1.5">预估工时</label>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={estimatedHours}
+              onChange={(e) => setEstimatedHours(e.target.value)}
+              placeholder="如 8"
+              className={field}
+            />
+          </div>
         </div>
 
         <div>
@@ -213,11 +213,6 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onC
             {error}
           </div>
         )}
-
-        <div className="p-3 rounded-2xl bg-emerald-400/[0.06] border border-emerald-400/20 text-[11px] text-emerald-100/80 flex items-start gap-2">
-          <Sparkles className="w-3.5 h-3.5 text-emerald-300 mt-0.5 shrink-0" />
-          <span>任务将保存到数据库，刷新页面数据不丢失。</span>
-        </div>
       </form>
       <TagManageModal open={tagManageOpen} onClose={() => setTagManageOpen(false)} />
     </LiquidModal>

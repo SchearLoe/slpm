@@ -123,7 +123,7 @@ export const LiquidModal: React.FC<LiquidModalProps> = ({
             exit={{ opacity: 0, y: 20, scale: 0.96, filter: 'blur(8px)' }}
             transition={{ type: 'spring', stiffness: 360, damping: 26, mass: 0.8 }}
             className={clsx(
-              'relative w-full liquid-glass overflow-hidden p-0 text-white z-10 outline-none',
+              'relative w-full max-h-[85vh] flex flex-col liquid-glass overflow-hidden p-0 text-white z-10 outline-none',
               widthClass,
               className
             )}
@@ -138,7 +138,7 @@ export const LiquidModal: React.FC<LiquidModalProps> = ({
 
             <div className="pointer-events-none absolute -top-16 right-0 w-40 h-40 rounded-full bg-emerald-400/10 blur-3xl" />
 
-            <div className="relative z-10 p-5 sm:p-6 space-y-4">
+            <div className="relative z-10 p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {icon && (
