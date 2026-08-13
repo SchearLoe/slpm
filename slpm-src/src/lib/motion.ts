@@ -54,53 +54,48 @@ export const pageSlideVariants = (dir: number): Variants => ({
     opacity: 0,
     x: dir > 0 ? 28 : -28,
     y: 8,
-    filter: 'blur(8px)',
   },
   animate: {
     opacity: 1,
     x: 0,
     y: 0,
-    filter: 'blur(0px)',
+    // 不设 filter —— 任何 filter 值（含 blur(0px)）都会创建 backdrop-root，
+    // 导致子元素 backdrop-filter 采样断裂 → liquid-glass 蒙版发黑
     transition: { duration: 0.4, ease: easeOutExpo },
   },
   exit: {
     opacity: 0,
     x: dir > 0 ? -22 : 22,
-    filter: 'blur(6px)',
     transition: { duration: 0.22, ease: [0.4, 0, 1, 1] },
   },
 });
 
 /** 页内子视图 / Tab 切换 */
 export const viewVariants: Variants = {
-  initial: { opacity: 0, y: 12, filter: 'blur(6px)' },
+  initial: { opacity: 0, y: 12 },
   animate: {
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
     transition: { duration: 0.34, ease: easeOutExpo },
   },
   exit: {
     opacity: 0,
     y: -8,
-    filter: 'blur(4px)',
     transition: { duration: 0.18 },
   },
 };
 
 /** 顶栏标题切换 */
 export const titleVariants: Variants = {
-  initial: { opacity: 0, y: 8, filter: 'blur(4px)' },
+  initial: { opacity: 0, y: 8 },
   animate: {
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
     transition: { duration: 0.32, ease: easeOutExpo },
   },
   exit: {
     opacity: 0,
     y: -6,
-    filter: 'blur(3px)',
     transition: { duration: 0.16 },
   },
 };

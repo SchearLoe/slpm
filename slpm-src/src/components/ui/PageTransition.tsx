@@ -17,14 +17,12 @@ export const ViewTransition: React.FC<{
           opacity: 0,
           x: direction >= 0 ? 32 : -32,
           y: 6,
-          filter: 'blur(8px)',
           scale: 0.98,
         }}
         animate={{
           opacity: 1,
           x: 0,
           y: 0,
-          filter: 'blur(0px)',
           scale: 1,
           transition: {
             duration: 0.38,
@@ -34,7 +32,6 @@ export const ViewTransition: React.FC<{
         exit={{
           opacity: 0,
           x: direction >= 0 ? -28 : 28,
-          filter: 'blur(6px)',
           scale: 0.99,
           transition: { duration: 0.2, ease: [0.4, 0, 1, 1] },
         }}
@@ -53,7 +50,7 @@ export const RouteTransition: React.FC<{
   children: React.ReactNode;
   className?: string;
 }> = ({ routeKey, direction = 1, children, className }) => (
-  <AnimatePresence mode="wait" custom={direction}>
+  <AnimatePresence mode="wait" custom={direction} initial={false}>
     <motion.div
       key={routeKey}
       custom={direction}
