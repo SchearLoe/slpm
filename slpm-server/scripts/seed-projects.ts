@@ -129,6 +129,15 @@ async function main() {
     },
   });
 
+  // ── 4b. 如果已存在 demo@slpm.local（seed:demo 创建），也加入工作区避免"无工作区" ──
+  const demoUser = await prisma.user.findUnique({ where: { email: 'demo@slpm.local' } });
+  if (demoUser) {
+    await prisma.workspaceMember.create({
+      data: { workspaceId: workspace.id, userId: demoUser.id, role: 'admin' },
+    }).catch(() => { /* 已是成员则忽略 */ });
+    logger.log('  🔗 已将 demo@slpm.local 加入工作区');
+  }
+
   // ── 5. 标签库 ─────────────────────────────────────────────
   const tagDefs: { name: string; color: string }[] = [
     { name: '前端', color: 'cyan' },
