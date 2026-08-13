@@ -97,7 +97,9 @@
       rgba(255, 255, 255, 0.015) 70%,
       rgba(255, 255, 255, 0.04) 100%
     ),
-    rgba(12, 16, 28, 0.28);
+    /* 保底层：当 backdrop-filter 因 scroll 容器 / backdrop-root 断裂时，
+       仍有足够不透明度保证卡片可读，而非透出黑色 */
+    linear-gradient(180deg, rgba(22, 27, 42, 0.68) 0%, rgba(14, 18, 30, 0.78) 100%);
   backdrop-filter: blur(var(--blur-liquid)) saturate(160%);
   -webkit-backdrop-filter: blur(var(--blur-liquid)) saturate(160%);
   border: 1px solid transparent;

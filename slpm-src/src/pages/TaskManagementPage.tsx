@@ -27,8 +27,8 @@ export const TaskManagementPage: React.FC = () => {
       <div className="tasks-frame">
         <div className="tasks-left">
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             className="tasks-kpi shrink-0"
           >
@@ -36,8 +36,8 @@ export const TaskManagementPage: React.FC = () => {
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ delay: 0.05, duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             className="board-deck-row"
           >
@@ -60,8 +60,8 @@ export const TaskManagementPage: React.FC = () => {
 
           {/* 贴底：与右侧详情操作条下沿对齐 */}
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ delay: 0.1, duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             className="timeline-slot shrink-0 mt-auto"
           >
@@ -75,8 +75,8 @@ export const TaskManagementPage: React.FC = () => {
         </div>
 
         <motion.div
-          initial={{ opacity: 0, x: 10 }}
-          animate={{ opacity: 1, x: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ delay: 0.06, duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
           className="tasks-right"
         >

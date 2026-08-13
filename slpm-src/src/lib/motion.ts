@@ -18,33 +18,14 @@ export const easeOutExpo = [0.22, 1, 0.36, 1] as const;
 
 /** 主导航页面切换 */
 export const pageVariants: Variants = {
-  initial: {
-    opacity: 0,
-    y: 18,
-    scale: 0.985,
-    filter: 'blur(10px)',
-  },
+  initial: { opacity: 0 },
   animate: {
     opacity: 1,
-    y: 0,
-    scale: 1,
-    filter: 'blur(0px)',
-    transition: {
-      duration: 0.42,
-      ease: easeOutExpo,
-      opacity: { duration: 0.35 },
-      filter: { duration: 0.4 },
-    },
+    transition: { duration: 0.42, ease: easeOutExpo },
   },
   exit: {
     opacity: 0,
-    y: -14,
-    scale: 0.99,
-    filter: 'blur(8px)',
-    transition: {
-      duration: 0.22,
-      ease: [0.4, 0, 1, 1],
-    },
+    transition: { duration: 0.22, ease: [0.4, 0, 1, 1] },
   },
 };
 
@@ -124,11 +105,9 @@ export const staggerContainer: Variants = {
 };
 
 export const staggerItem: Variants = {
-  hidden: { opacity: 0, y: 10, filter: 'blur(4px)' },
+  hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    y: 0,
-    filter: 'blur(0px)',
     transition: { duration: 0.32, ease: easeOutExpo },
   },
 };
