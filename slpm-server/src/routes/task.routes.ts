@@ -61,6 +61,8 @@ const listQuerySchema = z.object({
     .enum(['需求评审', '产品设计', '开发实现', '测试验证'])
     .optional(),
   assignedToMe: z.enum(['true', 'false']).optional(),
+  // P10：归档过滤 —— 缺省=排除已归档；only=回收站（仅已归档）；true=全部
+  archived: z.enum(['true', 'false', 'only']).optional(),
   // P6-A：按标签筛选（精确匹配 tags 数组中包含该值的任务）
   tag: z.string().max(30).optional(),
   // P6-D：批量操作前的列表 id 过滤（取指定 id 集合，用于批量预览）
@@ -83,6 +85,9 @@ router.get(
 
     // P1-2：按工作区隔离（替代原 ownerId 过滤）
     const where: Record<string, unknown> = { workspaceId: req.workspace!.id };
+    // P10：归档过滤（缺省排除已归档，保持既有行为不变）
+    if (parsed.data.archived === 'only') where.archived = true;
+    else if (parsed.data.archived !== 'true') where.archived = false;
     if (parsed.data.status) where.status = parsed.data.status;
     if (parsed.data.phase) where.phase = parsed.data.phase;
     if (parsed.data.assignedToMe === 'true') where.assigneeId = req.user!.sub;
@@ -335,6 +340,35 @@ router.patch(
     // P1-1：写「完成任务」活动
     await prisma.taskActivity
       .create({ data: { taskId: task.id, actorId: req.user!.sub, action: '完成任务' } })
+      .catch(() => {});
+    res.json({ task });
+  }),
+);
+
+// ---- PATCH /api/tasks/:id/archive —— P10 归档/恢复（软删除回收站）----
+router.patch(
+  '/:id/archive',
+  requireAuth,
+  requireWorkspace,
+  asyncHandler(async (req, res) => {
+    const bodySchema = z.object({ archived: z.boolean() });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, '参数校验失败');
+
+    const task = await prisma.task.update({
+      where: { id: req.params.id, workspaceId: req.workspace!.id },
+      data: { archived: parsed.data.archived },
+      include: { assignee: { select: { id: true, name: true, avatar: true, role: true } } },
+    });
+    await prisma.taskActivity
+      .create({
+        data: {
+          taskId: task.id,
+          actorId: req.user!.sub,
+          action: '更新字段',
+          detail: parsed.data.archived ? '移入回收站' : '从回收站恢复',
+        },
+      })
       .catch(() => {});
     res.json({ task });
   }),

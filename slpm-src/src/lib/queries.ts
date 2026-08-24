@@ -85,6 +85,37 @@ export function useDeleteTask() {
   });
 }
 
+// P10：归档/恢复任务（软删除）
+export function useArchiveTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, archived }: { id: string; archived: boolean }) => {
+      const res = await api.patch<{ task: TaskItem }>(`/tasks/${id}/archive`, { archived });
+      return res.data.task;
+    },
+    onSuccess: (task) => {
+      // 归档后从主列表移除；恢复则插回
+      qc.setQueryData<TaskItem[]>(TASKS_KEY, (old) =>
+        task.archived
+          ? (old ?? []).filter((t) => t.id !== task.id)
+          : [...(old ?? []).filter((t) => t.id !== task.id), task],
+      );
+      qc.invalidateQueries({ queryKey: ['archived-tasks'] });
+    },
+  });
+}
+
+// P10：回收站列表（仅已归档任务）
+export function useArchivedTasks() {
+  return useQuery({
+    queryKey: ['archived-tasks'],
+    queryFn: async () => {
+      const res = await api.get<{ tasks: TaskItem[] }>('/tasks?archived=only');
+      return res.data.tasks;
+    },
+  });
+}
+
 // ============ 日程 ============
 
 export interface ScheduleEvent {

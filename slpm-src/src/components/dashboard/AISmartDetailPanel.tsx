@@ -22,7 +22,7 @@ import { LiquidModal } from '@/components/ui/LiquidModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Avatar } from '@/components/ui/Avatar';
 import { TaskChecklist } from '@/components/dashboard/TaskChecklist';
-import { useCompleteTask, useUpdateTask, useComments, useCreateComment, useUpdateComment, useDeleteComment, useTaskActivity, streamAiSuggest } from '@/lib/queries';
+import { useCompleteTask, useUpdateTask, useArchiveTask, useComments, useCreateComment, useUpdateComment, useDeleteComment, useTaskActivity, streamAiSuggest } from '@/lib/queries';
 import { apiError } from '@/lib/api';
 import confetti from 'canvas-confetti';
 
@@ -60,6 +60,7 @@ export const AISmartDetailPanel: React.FC = () => {
   const { user } = useAuth();
   const completeTask = useCompleteTask();
   const updateTask = useUpdateTask();
+  const archiveTask = useArchiveTask();
   // P1-1：评论 / 活动流（task 可能 undefined，hooks 内部用 enabled 守卫）
   const commentsQ = useComments(selectedTask?.id);
   const createComment = useCreateComment(selectedTask?.id);
@@ -523,6 +524,19 @@ export const AISmartDetailPanel: React.FC = () => {
                               flash('任务已标记为延期');
                             } catch (err) {
                               flash(apiError(err, '操作失败'));
+                            }
+                          },
+                        },
+                        {
+                          // P10：移入回收站（软归档，可恢复）
+                          label: '移入回收站',
+                          action: async () => {
+                            try {
+                              await archiveTask.mutateAsync({ id: task.id, archived: true });
+                              setSelectedTask(null);
+                              flash('已移入回收站，可在筛选栏「回收站」中恢复');
+                            } catch (err) {
+                              flash(apiError(err, '归档失败'));
                             }
                           },
                         },

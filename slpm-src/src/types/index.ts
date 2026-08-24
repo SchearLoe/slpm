@@ -98,6 +98,8 @@ export interface TaskItem {
   tags: string[];
   aiSuggestions?: string[];
   completionProgress?: number; // 0-100%
+  // P10：归档（软删除，回收站可恢复）
+  archived?: boolean;
 }
 
 export interface MetricCardData {

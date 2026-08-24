@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ArrowUpDown, Plus, Clock, CheckSquare, Square, X, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ArrowUpDown, Plus, Clock, CheckSquare, Square, X, AlertTriangle, ArchiveRestore, Trash2 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useApp } from '@/context/AppContext';
@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/Toast';
 import { clsx } from 'clsx';
 import { listItemVariants, springSoft } from '@/lib/motion';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
-import { useTasks, useUpdateTask, useTags, useBatchTasks, type BatchAction } from '@/lib/queries';
+import { useTasks, useUpdateTask, useArchiveTask, useDeleteTask, useArchivedTasks, useTags, useBatchTasks, type BatchAction } from '@/lib/queries';
 import { apiError } from '@/lib/api';
 import { getRoleConfig } from '@/lib/roleConfig';
 import { tagColorClass } from '@/lib/tagColors';
@@ -24,13 +24,18 @@ export const TaskGroupList: React.FC = () => {
   const { data: tags = [] } = useTags();
   const updateTask = useUpdateTask();
   const batchTasks = useBatchTasks();
+  // P10：回收站（归档任务恢复 + 彻底删除）
+  const archivedQ = useArchivedTasks();
+  const archiveTask = useArchiveTask();
+  const deleteTask = useDeleteTask();
   // P6-E3：筛选状态持久化到 URL query（刷新/分享链接保持筛选）
   const [searchParams, setSearchParams] = useSearchParams();
   // P2-1：默认筛选按角色
   const roleCfg = getRoleConfig(currentRole);
-  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'assigned' | 'participated' | 'phase-qa'>(
-    (searchParams.get('tab') as 'all' | 'assigned' | 'participated' | 'phase-qa') || roleCfg.defaultTaskFilter,
+  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'assigned' | 'participated' | 'phase-qa' | 'recycle'>(
+    (searchParams.get('tab') as 'all' | 'assigned' | 'participated' | 'phase-qa' | 'recycle') || roleCfg.defaultTaskFilter,
   );
+  const isRecycleView = activeFilterTab === 'recycle';
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
   const [tagFilter, setTagFilter] = useState(searchParams.get('tag') || 'all');
   const [sortOrder, setSortOrder] = useState<'priority' | 'time'>('priority');
@@ -56,6 +61,8 @@ export const TaskGroupList: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // P8：批量删除二次确认（替代原生 confirm）
   const [pendingBatchDelete, setPendingBatchDelete] = useState(false);
+  // P10：回收站彻底删除二次确认
+  const [pendingPurgeId, setPendingPurgeId] = useState<string | null>(null);
   // P8：操作后高亮反馈 —— 刚移动/新建的任务闪一下 emerald 边框，帮用户在长列表里快速定位
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const flashHighlight = (id: string) => {
@@ -150,6 +157,7 @@ export const TaskGroupList: React.FC = () => {
     { id: 'assigned' as const, label: '我负责的' },
     { id: 'participated' as const, label: '我参与的' },
     { id: 'phase-qa' as const, label: '测试验证' },
+    { id: 'recycle' as const, label: '回收站' },
   ];
 
   return (
@@ -164,6 +172,26 @@ export const TaskGroupList: React.FC = () => {
         title={`批量删除 ${selectedIds.size} 个任务？`}
         description="被删除的任务及其评论、活动记录将一并清除，该操作不可恢复。"
         confirmText="确认删除"
+      />
+      {/* P10：回收站彻底删除二次确认 */}
+      <ConfirmDialog
+        open={!!pendingPurgeId}
+        onClose={() => setPendingPurgeId(null)}
+        onConfirm={async () => {
+          const id = pendingPurgeId;
+          setPendingPurgeId(null);
+          if (!id) return;
+          try {
+            await deleteTask.mutateAsync(id);
+            show('任务已彻底删除');
+          } catch (err) {
+            show(apiError(err, '删除失败'));
+          }
+        }}
+        variant="danger"
+        title="彻底删除这个任务？"
+        description="任务及其评论、活动记录将被永久删除，无法恢复。如只是暂时收起，请使用「恢复」。"
+        confirmText="彻底删除"
       />
       {/* 筛选工具条：永远单行，不换行 */}
       <div className="flex items-center gap-2 flex-nowrap min-w-0 overflow-x-auto pb-0.5 shrink-0">
@@ -273,8 +301,63 @@ export const TaskGroupList: React.FC = () => {
       </AnimatePresence>
 
       <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-0.5">
-        {/* P9-UX：加载中显示骨架屏，避免四列看板全显示「暂无任务」的假空态 */}
-        {isLoading ? (
+        {/* P10：回收站视图 —— 归档任务列表（恢复 / 彻底删除） */}
+        {isRecycleView ? (
+          archivedQ.isLoading ? (
+            <div className="liquid-glass rounded-[18px] p-3">
+              <SkeletonRows rows={3} />
+            </div>
+          ) : (archivedQ.data ?? []).length === 0 ? (
+            <div className="liquid-glass rounded-[18px] p-8 flex flex-col items-center gap-2 text-center">
+              <ArchiveRestore className="w-7 h-7 text-white/20" />
+              <p className="text-[12px] text-white/40">回收站是空的</p>
+              <p className="text-[10px] text-white/25">在任务详情「···」菜单中选择「移入回收站」，任务会归档到这里</p>
+            </div>
+          ) : (
+            <div className="liquid-glass rounded-[18px] p-3 space-y-1.5">
+              <div className="flex items-center justify-between px-1 pb-1.5 border-b border-white/[0.06]">
+                <span className="text-[12px] font-bold text-white/85">已归档任务 · {(archivedQ.data ?? []).length}</span>
+                <span className="text-[10px] text-white/30">归档不影响统计数据</span>
+              </div>
+              {(archivedQ.data ?? []).map((t) => (
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:border-white/[0.12] transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12px] font-medium text-white/75 truncate">{t.title}</div>
+                    <div className="text-[10px] text-white/30 truncate">
+                      {t.phase} · {t.assignee?.name ?? '未指派'}{t.createdAt ? ` · 归档于 ${new Date(t.createdAt).toLocaleDateString('zh-CN')}` : ''}
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await archiveTask.mutateAsync({ id: t.id, archived: false });
+                        show('任务已恢复');
+                      } catch (err) {
+                        show(apiError(err, '恢复失败'));
+                      }
+                    }}
+                    disabled={archiveTask.isPending}
+                    className="shrink-0 h-7 px-3 rounded-full liquid-btn-ghost text-[10px] text-emerald-300/90 flex items-center gap-1 disabled:opacity-40"
+                  >
+                    <ArchiveRestore className="w-3 h-3" /> 恢复
+                  </button>
+                  <button
+                    onClick={() => setPendingPurgeId(t.id)}
+                    className="shrink-0 h-7 px-3 rounded-full liquid-btn-ghost text-[10px] text-rose-300/80 flex items-center gap-1 hover:text-rose-300"
+                    title="彻底删除"
+                  >
+                    <Trash2 className="w-3 h-3" /> 删除
+                  </button>
+                </motion.div>
+              ))}
+            </div>
+          )
+        ) : isLoading ? (
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
             {phases.map((p) => (
               <div key={p} className="liquid-glass rounded-[18px] p-3">

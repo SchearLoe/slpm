@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { FileRecord } from '@/types';
 import { useFiles, useUploadFile, useDeleteFile, useRenameFile, useFilePreviewUrl, downloadFile } from '@/lib/queries';
+import { FileVersionHistory } from '@/components/files/FileVersionHistory';
 import { apiError, formatFileSize } from '@/lib/api';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -403,6 +404,8 @@ export const FileDocumentsPage: React.FC = () => {
             <p><span className="text-white/40">类型：</span>{previewFile.mimeType || '未知'} · <span className="text-white/40">大小：</span>{formatFileSize(previewFile.size)}</p>
             <p><span className="text-white/40">上传者：</span>{previewFile.uploader.name} · <span className="text-white/40">时间：</span>{new Date(previewFile.createdAt).toLocaleString('zh-CN')}</p>
             {previewFile.tags.length > 0 && <p><span className="text-white/40">标签：</span>{previewFile.tags.join('、')}</p>}
+            {/* P10-3：版本历史 + 回滚 */}
+            <FileVersionHistory file={previewFile} />
           </div>
         )}
       </LiquidModal>

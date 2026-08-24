@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { BookOpen, Search, Folder, FileText, Star, ChevronRight, Plus, Share2, Bookmark } from 'lucide-react';
+import { BookOpen, Search, Folder, FileText, Star, ChevronRight, Plus, Share2, Bookmark, Pencil, Trash2 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { LiquidSelect } from '@/components/ui/LiquidSelect';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Markdown, headingSlug } from '@/components/ui/Markdown';
 import { QueryError } from '@/components/QueryError';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
-import { useArticles, useCreateArticle, useToggleArticleStar } from '@/lib/queries';
+import { useArticles, useCreateArticle, useUpdateArticle, useDeleteArticle, useToggleArticleStar } from '@/lib/queries';
 import { apiError } from '@/lib/api';
 import { ArticleCategory, KnowledgeArticle } from '@/types';
 
@@ -32,6 +33,8 @@ export const KnowledgeBasePage: React.FC = () => {
   const { show, ToastEl } = useToast();
   const { data: articles = [], isLoading, isError, refetch } = useArticles();
   const createArticleMut = useCreateArticle();
+  const updateArticleMut = useUpdateArticle();
+  const deleteArticleMut = useDeleteArticle();
   const toggleStarMut = useToggleArticleStar();
 
   const [search, setSearch] = useState('');
@@ -44,6 +47,9 @@ export const KnowledgeBasePage: React.FC = () => {
     category: 'UI/UX 规范',
     body: '',
   });
+  // P10-4：编辑 / 删除
+  const [editArticle, setEditArticle] = useState<KnowledgeArticle | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<KnowledgeArticle | null>(null);
 
   // 分类文件夹（与后端 CATEGORIES 对齐）
   const folders: { name: ArticleCategory; label: string; color: string; match: (c: ArticleCategory) => boolean }[] = [
@@ -87,6 +93,25 @@ export const KnowledgeBasePage: React.FC = () => {
 
   const toggleStar = (article: KnowledgeArticle) => {
     toggleStarMut.mutate({ id: article.id, starred: !article.starred });
+  };
+
+  // P10-4：保存编辑
+  const saveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editArticle || !editArticle.title.trim()) return;
+    try {
+      const updated = await updateArticleMut.mutateAsync({
+        id: editArticle.id,
+        title: editArticle.title.trim(),
+        category: editArticle.category,
+        body: editArticle.body,
+      });
+      setOpenArticle(updated);
+      setEditArticle(null);
+      show('文章已更新');
+    } catch (err) {
+      show(apiError(err, '更新失败'));
+    }
   };
 
   if (isError) {
@@ -217,12 +242,25 @@ export const KnowledgeBasePage: React.FC = () => {
         widthClass="max-w-2xl"
         footer={
           <div className="flex justify-end gap-2 flex-wrap">
+            <button
+              onClick={() => openArticle && setPendingDelete(openArticle)}
+              className="h-10 px-4 rounded-full liquid-btn-ghost text-[12px] text-rose-300/80 hover:text-rose-300 flex items-center gap-1.5"
+              title="删除文章"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> 删除
+            </button>
             <button onClick={() => setOpenArticle(null)} className="h-10 px-4 rounded-full liquid-btn-ghost text-[12px] text-white/60">关闭</button>
             <button
               onClick={() => openArticle && toggleStar(openArticle)}
               className="h-10 px-4 rounded-full liquid-btn-ghost text-[12px] text-white/70"
             >
               {openArticle?.starred ? '取消收藏' : '收藏'}
+            </button>
+            <button
+              onClick={() => openArticle && setEditArticle({ ...openArticle })}
+              className="h-10 px-4 rounded-full liquid-btn-ghost text-[12px] text-white/70 flex items-center gap-1.5"
+            >
+              <Pencil className="w-3.5 h-3.5" /> 编辑
             </button>
             <button
               onClick={() => {
@@ -297,6 +335,75 @@ export const KnowledgeBasePage: React.FC = () => {
           <textarea rows={4} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="正文内容" className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white resize-none" />
         </form>
       </LiquidModal>
+
+      {/* P10-4：编辑文章弹窗 */}
+      <LiquidModal
+        open={!!editArticle}
+        onClose={() => setEditArticle(null)}
+        title="编辑知识库文章"
+        subtitle={editArticle ? `编辑于 ${editArticle.category}` : undefined}
+        icon={<Pencil className="w-5 h-5" />}
+        footer={
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setEditArticle(null)} className="h-10 px-4 rounded-full liquid-btn-ghost text-[12px] text-white/60">取消</button>
+            <button form="kb-edit-form" type="submit" disabled={updateArticleMut.isPending} className="h-10 px-4 rounded-full liquid-btn-primary text-[12px] font-bold disabled:opacity-50">
+              {updateArticleMut.isPending ? '保存中…' : '保存修改'}
+            </button>
+          </div>
+        }
+      >
+        {editArticle && (
+          <form id="kb-edit-form" onSubmit={saveEdit} className="space-y-3">
+            <input
+              required
+              autoFocus
+              value={editArticle.title}
+              onChange={(e) => setEditArticle({ ...editArticle, title: e.target.value })}
+              placeholder="文章标题"
+              className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white"
+            />
+            <LiquidSelect
+              value={editArticle.category}
+              onChange={(v) => setEditArticle({ ...editArticle, category: v as ArticleCategory })}
+              options={[
+                { value: 'UI/UX 规范', label: 'UI/UX 规范' },
+                { value: '技术架构', label: '技术架构' },
+                { value: '团队流程', label: '团队流程' },
+                { value: '质量保障', label: '质量保障' },
+              ]}
+            />
+            <textarea
+              rows={10}
+              value={editArticle.body}
+              onChange={(e) => setEditArticle({ ...editArticle, body: e.target.value })}
+              placeholder="正文内容（支持 Markdown）"
+              className="liquid-input w-full px-3.5 py-2.5 rounded-xl text-[12px] text-white resize-none font-mono"
+            />
+          </form>
+        )}
+      </LiquidModal>
+
+      {/* P10-4：删除文章二次确认 */}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          const target = pendingDelete;
+          setPendingDelete(null);
+          if (!target) return;
+          try {
+            await deleteArticleMut.mutateAsync(target.id);
+            setOpenArticle(null);
+            show('文章已删除');
+          } catch (err) {
+            show(apiError(err, '删除失败'));
+          }
+        }}
+        variant="danger"
+        title="删除这篇知识库文章？"
+        description={`「${pendingDelete?.title ?? ''}」将被永久删除，该操作不可恢复。`}
+        confirmText="确认删除"
+      />
     </div>
   );
 };

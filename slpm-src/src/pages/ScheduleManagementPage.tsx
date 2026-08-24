@@ -13,6 +13,7 @@ import {
   Pencil,
   Trash2,
   Download,
+  AlertTriangle,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
@@ -590,7 +591,7 @@ function MonthView({
   );
 }
 
-// ============ 周视图（基于选中日期所在周） ============
+// ============ 周视图（基于选中日期所在周，含冲突高亮） ============
 function WeekView({
   selectedDate, events, onSelectDay, onSelectEvent,
 }: {
@@ -609,12 +610,38 @@ function WeekView({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
 
+  // P10-5：按天分组，检测时间重叠的冲突事件（同一天内 startA < endB && startB < endA）
+  const conflictIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const dStr of weekDays) {
+      const dayEvents = events.filter((e) => e.startTime.slice(0, 10) === dStr);
+      for (let i = 0; i < dayEvents.length; i++) {
+        for (let j = i + 1; j < dayEvents.length; j++) {
+          const a = dayEvents[i], b = dayEvents[j];
+          if (new Date(a.startTime) < new Date(b.endTime) && new Date(b.startTime) < new Date(a.endTime)) {
+            ids.add(a.id);
+            ids.add(b.id);
+          }
+        }
+      }
+    }
+    return ids;
+  }, [events, weekDays.join()]);
+
   return (
     <div className="h-full min-h-[420px] overflow-auto">
+      {/* P10-5：冲突图例 */}
+      {conflictIds.size > 0 && (
+        <div className="mb-2 flex items-center gap-1.5 text-[10.5px] text-rose-300/80">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          本周有 {conflictIds.size} 个日程时间冲突（红色标记），建议调整
+        </div>
+      )}
       <div className="grid grid-cols-[52px_repeat(7,minmax(0,1fr))] gap-1 min-w-[640px]">
         <div />
         {weekDays.map((dStr, i) => {
           const dayNum = Number(dStr.slice(8));
+          const dayHasConflict = events.some((e) => e.startTime.slice(0, 10) === dStr && conflictIds.has(e.id));
           return (
             <button
               key={dStr}
@@ -625,7 +652,10 @@ function WeekView({
                   : 'text-white/45 border-transparent hover:bg-white/[0.03]'
               }`}
             >
-              <div>周{WEEKDAY_LABELS[i]}</div>
+              <div className="flex items-center justify-center gap-1">
+                <span>周{WEEKDAY_LABELS[i]}</span>
+                {dayHasConflict && <AlertTriangle className="w-3 h-3 text-rose-400/80" />}
+              </div>
               <div className="font-mono text-[13px] mt-0.5">{dayNum}</div>
             </button>
           );
@@ -635,17 +665,32 @@ function WeekView({
             <div className="text-[10px] font-mono text-white/30 py-2 pr-1 text-right">{String(hour).padStart(2, '0')}:00</div>
             {weekDays.map((dStr) => {
               const cellEvents = events.filter((e) => e.startTime.slice(0, 13) === `${dStr}T${String(hour).padStart(2, '0')}`);
+              const cellConflict = cellEvents.some((e) => conflictIds.has(e.id));
               return (
-                <div key={`${dStr}-${hour}`} className="min-h-[44px] border border-white/[0.04] rounded-lg bg-black/15 p-0.5">
-                  {cellEvents.map((e) => (
-                    <button
-                      key={e.id}
-                      onClick={() => onSelectEvent(e)}
-                      className="w-full text-left px-1.5 py-1 rounded-md text-[9px] bg-emerald-500/20 text-emerald-100 border border-emerald-400/25 truncate hover:brightness-110"
-                    >
-                      {e.title}
-                    </button>
-                  ))}
+                <div
+                  key={`${dStr}-${hour}`}
+                  className={`min-h-[44px] border rounded-lg p-0.5 ${
+                    cellConflict ? 'border-rose-400/30 bg-rose-500/[0.06]' : 'border-white/[0.04] bg-black/15'
+                  }`}
+                >
+                  {cellEvents.map((e) => {
+                    const conflicted = conflictIds.has(e.id);
+                    return (
+                      <button
+                        key={e.id}
+                        onClick={() => onSelectEvent(e)}
+                        title={conflicted ? `⚠ 时间冲突：${fmtRange(e.startTime, e.endTime)}` : fmtRange(e.startTime, e.endTime)}
+                        className={`w-full text-left px-1.5 py-1 rounded-md text-[9px] truncate hover:brightness-110 flex items-center gap-0.5 ${
+                          conflicted
+                            ? 'bg-rose-500/25 text-rose-100 border border-rose-400/40'
+                            : 'bg-emerald-500/20 text-emerald-100 border border-emerald-400/25'
+                        }`}
+                      >
+                        {conflicted && <AlertTriangle className="w-2.5 h-2.5 shrink-0" />}
+                        <span className="truncate">{e.title}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               );
             })}
