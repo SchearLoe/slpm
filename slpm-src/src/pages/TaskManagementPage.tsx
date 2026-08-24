@@ -2,7 +2,6 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { KPICardsRow } from '@/components/dashboard/KPICardsRow';
 import { TaskGroupList } from '@/components/dashboard/TaskGroupList';
-import { RecentFilesPanel } from '@/components/dashboard/RecentFilesPanel';
 import { ProjectTimeline } from '@/components/dashboard/ProjectTimeline';
 import { AISmartDetailPanel } from '@/components/dashboard/AISmartDetailPanel';
 import { QueryError } from '@/components/QueryError';
@@ -39,22 +38,16 @@ export const TaskManagementPage: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.05, duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            className="board-deck-row"
+            className="flex-1 min-h-0 flex flex-col gap-2"
           >
-            <div className="board-col min-w-0 min-h-0 flex flex-col gap-2">
-              <div className="flex items-center justify-between px-0.5 h-5 shrink-0">
-                <h3 className="text-[13px] font-bold text-white/90 tracking-wide">任务看板</h3>
-                <span className="text-[10px] font-mono text-white/25">
-                  {isLoading ? '加载中…' : `${tasks.length} active`}
-                </span>
-              </div>
-              <div className="board-body min-h-0 flex-1 overflow-hidden">
-                <TaskGroupList />
-              </div>
+            <div className="flex items-center justify-between px-0.5 h-5 shrink-0">
+              <h3 className="text-[13px] font-bold text-white/90 tracking-wide">任务看板</h3>
+              <span className="text-[10px] font-mono text-white/25">
+                {isLoading ? '加载中…' : `${tasks.length} active`}
+              </span>
             </div>
-
-            <div className="deck-void min-w-0 min-h-0">
-              <RecentFilesPanel />
+            <div className="board-body min-h-0 flex-1 overflow-hidden">
+              <TaskGroupList />
             </div>
           </motion.div>
 
