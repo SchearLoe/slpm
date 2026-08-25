@@ -464,6 +464,8 @@ export const TaskGroupList: React.FC = () => {
                             variants={listItemVariants}
                             initial="hidden"
                             animate="show"
+                            layout
+                            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                             draggable={!selectMode}
                             onDragStart={(e) => {
                               if (selectMode) return;

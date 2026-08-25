@@ -8,6 +8,7 @@ import { springSoft } from '@/lib/motion';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { SkeletonCards } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 
 export const KPICardsRow: React.FC<{ onCardClick?: (t: string) => void }> = ({ onCardClick }) => {
   const { setSelectedTask, setIsNewTaskOpen } = useApp();
@@ -69,14 +70,11 @@ export const KPICardsRow: React.FC<{ onCardClick?: (t: string) => void }> = ({ o
               <div className="min-w-0 space-y-1">
                 <div className="text-[12px] text-white/45 font-medium">{card.title}</div>
                 <div className="flex items-baseline gap-1.5">
-                  <motion.span
-                    key={card.count}
-                    initial={{ opacity: 0.4, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
+                  <AnimatedNumber
+                    value={card.count}
+                    duration={0.8}
                     className="text-[28px] font-extrabold text-white leading-none tracking-tight tabular-nums"
-                  >
-                    {card.count}
-                  </motion.span>
+                  />
                   <span className="text-[11px] text-white/35">{card.unit}</span>
                 </div>
                 <div className="text-[11px] flex items-center gap-1 pt-0.5">

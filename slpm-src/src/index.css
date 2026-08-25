@@ -14,6 +14,51 @@
   --radius-glass: 22px;
 }
 
+/* ========== P11-1a：主题色系统 ==========
+   AppContext 把 accentColor 写到 <html data-accent="...">。
+   Tailwind v4 工具类引用 --color-emerald-* 变量，此处作用域覆盖即全局换色；
+   --accent-* 空格分隔 RGB 供下方手写 rgba() 处使用（rgb(var(--accent-400) / 0.5)）。
+   缺省 emerald 与 Tailwind 默认色值一致，无需 :root 重复定义。 */
+:root {
+  --accent-glow: 34 197 94;   /* green-500 */
+  --accent-500: 16 185 129;   /* emerald-500 */
+  --accent-400: 52 211 153;   /* emerald-400 */
+  --accent-300: 110 231 183;  /* emerald-300 */
+  --accent-200: 167 243 208;  /* emerald-200 */
+}
+[data-accent="cyan"] {
+  --color-emerald-50: #ecfeff;
+  --color-emerald-100: #cffafe;
+  --color-emerald-200: #a5f3fc;
+  --color-emerald-300: #67e8f9;
+  --color-emerald-400: #22d3ee;
+  --color-emerald-500: #06b6d4;
+  --color-emerald-700: #0e7490;
+  --color-emerald-950: #083344;
+  --color-neon: #06b6d4;
+  --accent-glow: 34 211 238;    /* 亮光晕（原 green-500） */
+  --accent-500: 6 182 212;      /* 主色（原 emerald-500） */
+  --accent-400: 34 211 238;     /* 常用主色亮档（原 emerald-400） */
+  --accent-300: 103 232 249;    /* 文本主色（原 emerald-300） */
+  --accent-200: 233 213 255;    /* 次级文本（原 emerald-200，取亮档保证可读） */
+}
+[data-accent="purple"] {
+  --color-emerald-50: #faf5ff;
+  --color-emerald-100: #f3e8ff;
+  --color-emerald-200: #e9d5ff;
+  --color-emerald-300: #d8b4fe;
+  --color-emerald-400: #c084fc;
+  --color-emerald-500: #a855f7;
+  --color-emerald-700: #7e22ce;
+  --color-emerald-950: #3b0764;
+  --color-neon: #a855f7;
+  --accent-glow: 192 132 252;
+  --accent-500: 168 85 247;
+  --accent-400: 192 132 252;
+  --accent-300: 216 180 254;
+  --accent-200: 233 213 255;
+}
+
 @layer base {
   html,
   body,
@@ -40,7 +85,7 @@
   }
 
   ::selection {
-    background: rgba(34, 197, 94, 0.28);
+    background: rgb(var(--accent-glow) / 0.28);
     color: #ecfdf5;
   }
 }
@@ -58,7 +103,7 @@
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(34, 197, 94, 0.45);
+  background: rgb(var(--accent-glow) / 0.45);
 }
 
 /* ========== Liquid Glass System ========== */
@@ -67,9 +112,9 @@
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(ellipse 60% 50% at 15% 20%, rgba(16, 185, 129, 0.08), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 15% 20%, rgb(var(--accent-500) / 0.08), transparent 55%),
     radial-gradient(ellipse 50% 45% at 85% 15%, rgba(56, 189, 248, 0.05), transparent 50%),
-    radial-gradient(ellipse 45% 40% at 70% 85%, rgba(16, 185, 129, 0.06), transparent 55%),
+    radial-gradient(ellipse 45% 40% at 70% 85%, rgb(var(--accent-500) / 0.06), transparent 55%),
     radial-gradient(ellipse 40% 35% at 30% 75%, rgba(99, 102, 241, 0.04), transparent 50%),
     #000;
 }
@@ -156,7 +201,7 @@
     0 1px 0 0 rgba(255, 255, 255, 0.28) inset,
     0 -1px 0 0 rgba(0, 0, 0, 0.35) inset,
     0 24px 60px -12px rgba(0, 0, 0, 0.7),
-    0 0 30px rgba(34, 197, 94, 0.08);
+    0 0 30px rgb(var(--accent-glow) / 0.08);
   background:
     linear-gradient(
       165deg,
@@ -171,15 +216,15 @@
   background:
     linear-gradient(
       165deg,
-      rgba(34, 197, 94, 0.16) 0%,
+      rgb(var(--accent-glow) / 0.16) 0%,
       rgba(255, 255, 255, 0.05) 40%,
       rgba(22, 27, 42, 0.6) 100%
     ),
     linear-gradient(180deg, rgba(20, 26, 40, 0.75) 0%, rgba(14, 18, 30, 0.82) 100%);
   box-shadow:
-    0 0 0 1px rgba(34, 197, 94, 0.28) inset,
+    0 0 0 1px rgb(var(--accent-glow) / 0.28) inset,
     0 1px 0 0 rgba(255, 255, 255, 0.2) inset,
-    0 0 28px rgba(34, 197, 94, 0.18),
+    0 0 28px rgb(var(--accent-glow) / 0.18),
     0 18px 50px -12px rgba(0, 0, 0, 0.65);
 }
 
@@ -219,10 +264,10 @@
 
 .liquid-input:focus {
   outline: none;
-  border-color: rgba(34, 197, 94, 0.45);
+  border-color: rgb(var(--accent-glow) / 0.45);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 0 0 3px rgba(34, 197, 94, 0.12),
+    0 0 0 3px rgb(var(--accent-glow) / 0.12),
     0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
@@ -244,9 +289,9 @@ input[type="range"].liquid-range::-webkit-slider-thumb,
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #34d399, #10b981);
+  background: linear-gradient(135deg, rgb(var(--accent-400)), rgb(var(--accent-500)));
   border: 2px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 10px rgb(var(--accent-500) / 0.5);
   transition: transform 0.15s ease;
 }
 input[type="range"].liquid-range::-webkit-slider-thumb:hover,
@@ -258,18 +303,18 @@ input[type="range"].liquid-range::-moz-range-thumb,
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #34d399, #10b981);
+  background: linear-gradient(135deg, rgb(var(--accent-400)), rgb(var(--accent-500)));
   border: 2px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 10px rgb(var(--accent-500) / 0.5);
 }
 
 .liquid-btn-primary {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 45%, #059669 100%);
+  background: linear-gradient(135deg, rgb(var(--accent-400)) 0%, rgb(var(--accent-500)) 45%, rgb(var(--accent-500) / 0.8) 100%);
   color: #04120c;
-  border: 1px solid rgba(167, 243, 208, 0.45);
+  border: 1px solid rgb(var(--accent-200) / 0.45);
   box-shadow:
-    0 0 0 1px rgba(16, 185, 129, 0.2),
-    0 0 24px rgba(16, 185, 129, 0.35),
+    0 0 0 1px rgb(var(--accent-500) / 0.2),
+    0 0 24px rgb(var(--accent-500) / 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.45);
   transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease, filter 0.2s ease;
 }
@@ -278,8 +323,8 @@ input[type="range"].liquid-range::-moz-range-thumb,
   filter: brightness(1.08);
   transform: translateY(-1px);
   box-shadow:
-    0 0 0 1px rgba(16, 185, 129, 0.3),
-    0 0 32px rgba(16, 185, 129, 0.5),
+    0 0 0 1px rgb(var(--accent-500) / 0.3),
+    0 0 32px rgb(var(--accent-500) / 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
@@ -311,11 +356,11 @@ input[type="range"].liquid-range::-moz-range-thumb,
 
 .frost-card-active {
   background:
-    linear-gradient(155deg, rgba(52, 211, 153, 0.55) 0%, rgba(16, 185, 129, 0.75) 40%, rgba(4, 120, 87, 0.85) 100%);
-  border: 1px solid rgba(167, 243, 208, 0.55);
+    linear-gradient(155deg, rgb(var(--accent-400) / 0.55) 0%, rgb(var(--accent-500) / 0.75) 40%, rgb(var(--accent-500) / 0.85) 100%);
+  border: 1px solid rgb(var(--accent-200) / 0.55);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    0 0 40px rgba(16, 185, 129, 0.45),
+    0 0 40px rgb(var(--accent-500) / 0.45),
     0 24px 50px rgba(0, 0, 0, 0.5);
 }
 
@@ -474,44 +519,9 @@ input[type="range"].liquid-range::-moz-range-thumb,
   }
 }
 
-/* stagger children helper */
-.stagger-children > * {
-  animation: riseIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.stagger-children > *:nth-child(1) { animation-delay: 0.02s; }
-.stagger-children > *:nth-child(2) { animation-delay: 0.06s; }
-.stagger-children > *:nth-child(3) { animation-delay: 0.10s; }
-.stagger-children > *:nth-child(4) { animation-delay: 0.14s; }
-.stagger-children > *:nth-child(5) { animation-delay: 0.18s; }
-.stagger-children > *:nth-child(6) { animation-delay: 0.22s; }
-
-@keyframes riseIn {
-  from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
-  to { opacity: 1; transform: translateY(0); filter: blur(0); }
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-.liquid-shimmer::before {
-  background-size: 200% 100%;
-  animation: shimmer 4.5s linear infinite;
-}
-
-@keyframes pulseGlow {
-  0%, 100% { opacity: 0.35; transform: scale(1); }
-  50% { opacity: 0.65; transform: scale(1.06); }
-}
-
-/* P8：骨架屏扫光（translateX 版，区别于 background-position 版 shimmer） */
+/* P8：骨架屏扫光（translateX 版） */
 @keyframes sweep {
   100% { transform: translateX(100%); }
-}
-
-.animate-pulse-glow {
-  animation: pulseGlow 4.5s infinite ease-in-out;
 }
 
 .text-mute {

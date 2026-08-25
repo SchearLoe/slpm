@@ -232,6 +232,9 @@ model ScheduleEvent {
   priority  String  @default("中") // 高 | 中 | 低
   attendees String[] // 参会人姓名（第二期改为 User 外键）
   status    String  @default("待开始") // 待开始 | 进行中 | 已结束
+  // P11-3：周期性日程 —— none | daily | weekly | biweekly | monthly
+  // 查询时按月窗口展开为虚拟场次（只存一份模板）
+  recurrence String @default("none")
 
   ownerId String
   owner   User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)

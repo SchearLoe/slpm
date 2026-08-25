@@ -21,6 +21,7 @@ import {
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
 import { SkeletonCards, SkeletonRows } from '@/components/ui/Skeleton';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { QueryError } from '@/components/QueryError';
 import { useToast } from '@/components/ui/Toast';
 import { springSoft } from '@/lib/motion';
@@ -232,10 +233,10 @@ export const AIAnalyticsPage: React.FC = () => {
   const overdueCount = tasks.filter((t) => t.status === '已延期').length;
   const completionRate = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
   const kpis = [
-    { label: '完成率', value: `${completionRate}%`, tip: `${completedCount}/${tasks.length} 项已完成`, icon: CheckCircle2, color: 'text-emerald-300' },
-    { label: '进行中', value: String(inProgressCount), tip: '当前在办任务', icon: Activity, color: 'text-cyan-300' },
-    { label: '延期任务', value: String(overdueCount), tip: overdueCount > 0 ? '需重点关注' : '暂无延期', icon: AlertTriangle, color: overdueCount > 0 ? 'text-rose-300' : 'text-white' },
-    { label: '瓶颈阶段', value: bottleneck ?? '—', tip: '未完成任务最多', icon: Target, color: 'text-amber-300' },
+    { label: '完成率', num: completionRate, rest: '%', tip: `${completedCount}/${tasks.length} 项已完成`, icon: CheckCircle2, color: 'text-emerald-300' },
+    { label: '进行中', num: inProgressCount, rest: '', tip: '当前在办任务', icon: Activity, color: 'text-cyan-300' },
+    { label: '延期任务', num: overdueCount, rest: '', tip: overdueCount > 0 ? '需重点关注' : '暂无延期', icon: AlertTriangle, color: overdueCount > 0 ? 'text-rose-300' : 'text-white' },
+    { label: '瓶颈阶段', num: 0, text: bottleneck ?? '—', tip: '未完成任务最多', icon: Target, color: 'text-amber-300' },
   ];
 
   // P1-4：真实 AI 重算 —— 把交付漏斗 + 成员负荷聚合作为上下文
@@ -442,7 +443,7 @@ export const AIAnalyticsPage: React.FC = () => {
             onClick={() => setDetail({
               title: k.label,
               level: '中',
-              body: `${k.label}：${k.value}（${k.tip}），基于当前工作区 ${tasks.length} 条任务实时聚合。`,
+              body: `${k.label}：${k.text ?? `${k.num}${k.rest}`}（${k.tip}），基于当前工作区 ${tasks.length} 条任务实时聚合。`,
               score: 50,
               kind: 'suggestion',
             })}
@@ -452,7 +453,14 @@ export const AIAnalyticsPage: React.FC = () => {
               <span>{k.label}</span>
               <k.icon className={`w-4 h-4 ${k.color}`} />
             </div>
-            <div className="text-[22px] font-extrabold text-white tracking-tight">{k.value}</div>
+            <div className="text-[22px] font-extrabold text-white tracking-tight">
+              {k.text ? k.text : (
+                <>
+                  <AnimatedNumber value={k.num} />
+                  {k.rest && <span className="text-[15px] font-bold text-white/50">{k.rest}</span>}
+                </>
+              )}
+            </div>
             <div className={`text-[11px] font-medium ${k.color}`}>{k.tip}</div>
           </motion.button>
         ))}

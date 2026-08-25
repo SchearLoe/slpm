@@ -127,6 +127,8 @@ export interface ScheduleEvent {
   priority: '高' | '中' | '低';
   attendees: string[];
   status: '待开始' | '进行中' | '已结束';
+  // P11-3：周期性日程（后端按月展开为虚拟场次，id 带 #日期后缀）
+  recurrence?: 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly';
   ownerId: string;
   createdAt: string;
 }

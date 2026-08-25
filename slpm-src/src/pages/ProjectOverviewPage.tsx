@@ -9,6 +9,7 @@ import { QueryError } from '@/components/QueryError';
 import { useToast } from '@/components/ui/Toast';
 import { springSoft } from '@/lib/motion';
 import { ViewTransition } from '@/components/ui/PageTransition';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { useTasks, useCreateTask } from '@/lib/queries';
 import { computeOverview, computeMemberLoad, OverviewStats } from '@/lib/aggregations';
 import { apiError } from '@/lib/api';
@@ -200,7 +201,9 @@ export const ProjectOverviewPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-4 shrink-0">
             <div className="text-right">
-              <div className="text-[28px] font-extrabold text-emerald-300 font-mono">{stats.completionRate}%</div>
+              <div className="text-[28px] font-extrabold text-emerald-300 font-mono">
+                <AnimatedNumber value={stats.completionRate} suffix="%" />
+              </div>
               <div className="text-[11px] text-white/40">总体完成度</div>
             </div>
             <motion.div
@@ -219,10 +222,10 @@ export const ProjectOverviewPage: React.FC = () => {
         {isLoading ? (
           <div className="col-span-2 xl:col-span-4"><SkeletonCards cards={4} /></div>
         ) : [
-          { title: '任务完成', value: `${stats.completed} / ${stats.total}`, tip: `完成率 ${stats.completionRate}%`, icon: CheckCircle2, color: 'text-emerald-300', to: '/tasks' },
-          { title: '进行中任务', value: `${stats.total - stats.completed} 项`, tip: '当前在办（含待处理）', icon: Zap, color: 'text-cyan-300', to: '/tasks' },
-          { title: '团队平均负荷', value: `${memberLoad.length ? Math.round(memberLoad.reduce((s, m) => s + m.load, 0) / memberLoad.length) : 0}%`, tip: '基于在办任务归一化', icon: Users, color: 'text-violet-300', to: '/team' },
-          { title: '潜在阻塞点', value: `${stats.blockedCount} 项`, tip: `${stats.overdue} 延期 / ${stats.pending} 待处理`, icon: AlertTriangle, color: 'text-rose-300', to: '/tasks' },
+          { title: '任务完成', num: stats.completed, rest: ` / ${stats.total}`, tip: `完成率 ${stats.completionRate}%`, icon: CheckCircle2, color: 'text-emerald-300', to: '/tasks' },
+          { title: '进行中任务', num: stats.total - stats.completed, rest: ' 项', tip: '当前在办（含待处理）', icon: Zap, color: 'text-cyan-300', to: '/tasks' },
+          { title: '团队平均负荷', num: memberLoad.length ? Math.round(memberLoad.reduce((s, m) => s + m.load, 0) / memberLoad.length) : 0, rest: '%', tip: '基于在办任务归一化', icon: Users, color: 'text-violet-300', to: '/team' },
+          { title: '潜在阻塞点', num: stats.blockedCount, rest: ' 项', tip: `${stats.overdue} 延期 / ${stats.pending} 待处理`, icon: AlertTriangle, color: 'text-rose-300', to: '/tasks' },
         ].map((c, i) => (
           <motion.button
             key={c.title}
@@ -238,7 +241,10 @@ export const ProjectOverviewPage: React.FC = () => {
               <span>{c.title}</span>
               <c.icon className={`w-4 h-4 ${c.color}`} />
             </div>
-            <div className="text-[22px] font-extrabold text-white">{c.value}</div>
+            <div className="text-[22px] font-extrabold text-white">
+              <AnimatedNumber value={c.num} />
+              <span className="text-[15px] font-bold text-white/50">{c.rest}</span>
+            </div>
             <div className={`text-[11px] font-medium ${c.color} flex items-center gap-1`}>
               {c.tip}
               <ArrowRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-60 group-hover:translate-x-0 transition-all" />

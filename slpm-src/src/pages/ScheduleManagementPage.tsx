@@ -14,6 +14,7 @@ import {
   Trash2,
   Download,
   AlertTriangle,
+  Repeat,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LiquidModal } from '@/components/ui/LiquidModal';
@@ -125,6 +126,8 @@ export const ScheduleManagementPage: React.FC = () => {
     location: '',
     priority: '高' as '高' | '中' | '低',
     attendees: '',
+    // P11-3：周期性日程
+    recurrence: 'none' as 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly',
   });
   const [form, setForm] = useState(emptyForm());
 
@@ -148,6 +151,7 @@ export const ScheduleManagementPage: React.FC = () => {
       location: '',
       priority: '高',
       attendees: '',
+      recurrence: 'none',
     });
     setEditing(null);
     setShowCreate(true);
@@ -162,6 +166,8 @@ export const ScheduleManagementPage: React.FC = () => {
       location: evt.location || '',
       priority: evt.priority,
       attendees: evt.attendees.join(', '),
+      // P11-3：周期性日程模板（虚拟场次的 id 带 #日期后缀，操作时剥离）
+      recurrence: evt.recurrence ?? 'none',
     });
     setShowCreate(true);
     setMenuId(null);
@@ -186,10 +192,13 @@ export const ScheduleManagementPage: React.FC = () => {
       priority: form.priority,
       attendees: form.attendees.split(/[,，]/).map((s) => s.trim()).filter(Boolean),
       status: editing?.status ?? ('待开始' as const),
+      recurrence: form.recurrence, // P11-3
     };
+    // P11-3：编辑周期性虚拟场次 → 操作的是系列模板（剥离 #日期后缀）
+    const realId = editing ? editing.id.split('#')[0] : null;
     try {
       if (editing) {
-        const r = await updateMut.mutateAsync({ id: editing.id, ...payload });
+        const r = await updateMut.mutateAsync({ id: realId!, ...payload });
         show('日程已更新');
         // P4-2：冲突预警
         if (r.conflicts && r.conflicts.length > 0) {
@@ -218,10 +227,11 @@ export const ScheduleManagementPage: React.FC = () => {
   };
   const confirmDelete = async () => {
     if (!pendingDelete) return;
-    const id = pendingDelete.id;
+    // P11-3：周期性场次删除的是整个系列模板
+    const id = pendingDelete.id.split('#')[0];
     try {
       await deleteMut.mutateAsync(id);
-      show('日程已删除');
+      show(pendingDelete.recurrence && pendingDelete.recurrence !== 'none' ? '周期性日程系列已删除' : '日程已删除');
     } catch (err) {
       show(apiError(err, '删除失败'));
     } finally {
@@ -259,7 +269,7 @@ export const ScheduleManagementPage: React.FC = () => {
         onConfirm={confirmDelete}
         variant="danger"
         title="删除该日程？"
-        description={pendingDelete ? `「${pendingDelete.title}」将被删除，该操作不可恢复。` : ''}
+        description={pendingDelete ? `「${pendingDelete.title}」将被删除${pendingDelete.recurrence && pendingDelete.recurrence !== 'none' ? '（含所有重复场次）' : ''}，该操作不可恢复。` : ''}
         confirmText="确认删除"
       />
 
@@ -512,6 +522,26 @@ export const ScheduleManagementPage: React.FC = () => {
               <label className="text-[11px] text-white/40 mb-1.5 block">参会人（逗号分隔）</label>
               <input className={field} value={form.attendees} onChange={(e) => setForm({ ...form, attendees: e.target.value })} />
             </div>
+            {/* P11-3：周期性日程 */}
+            <div>
+              <label className="text-[11px] text-white/40 mb-1.5 block">重复</label>
+              <LiquidSelect
+                value={form.recurrence}
+                onChange={(v) => setForm({ ...form, recurrence: v as typeof form.recurrence })}
+                options={[
+                  { value: 'none', label: '不重复' },
+                  { value: 'daily', label: '每天' },
+                  { value: 'weekly', label: '每周' },
+                  { value: 'biweekly', label: '每两周' },
+                  { value: 'monthly', label: '每月' },
+                ]}
+              />
+              {form.recurrence !== 'none' && (
+                <p className="text-[10px] text-emerald-300/70 mt-1.5">
+                  将按所选周期在日历中自动重复出现；编辑或删除任一场次会作用于整个系列
+                </p>
+              )}
+            </div>
           </div>
         </form>
       </LiquidModal>
@@ -577,8 +607,9 @@ function MonthView({
               </div>
               <div className="space-y-0.5 min-h-0 overflow-hidden flex-1">
                 {dayEvts.slice(0, 2).map((e) => (
-                  <div key={e.id} className="px-1 py-0.5 rounded text-[9px] truncate bg-emerald-500/15 text-emerald-200 border border-emerald-400/20">
-                    {e.title}
+                  <div key={e.id} className="px-1 py-0.5 rounded text-[9px] truncate bg-emerald-500/15 text-emerald-200 border border-emerald-400/20 flex items-center gap-0.5">
+                    {e.recurrence && e.recurrence !== 'none' && <Repeat className="w-2 h-2 shrink-0 opacity-70" />}
+                    <span className="truncate">{e.title}</span>
                   </div>
                 ))}
                 {dayEvts.length > 2 && <div className="text-[9px] text-white/30">+{dayEvts.length - 2}</div>}
@@ -628,6 +659,12 @@ function WeekView({
     return ids;
   }, [events, weekDays.join()]);
 
+  // P11-2c：当前时刻（今天日期串 / 分钟数 / 是否当前小时）
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const isCurrentHour = (hour: number) => now.getHours() === hour;
+
   return (
     <div className="h-full min-h-[420px] overflow-auto">
       {/* P10-5：冲突图例 */}
@@ -642,6 +679,7 @@ function WeekView({
         {weekDays.map((dStr, i) => {
           const dayNum = Number(dStr.slice(8));
           const dayHasConflict = events.some((e) => e.startTime.slice(0, 10) === dStr && conflictIds.has(e.id));
+          const isToday = dStr === todayStr;
           return (
             <button
               key={dStr}
@@ -649,12 +687,15 @@ function WeekView({
               className={`text-center py-2 rounded-xl text-[11px] font-semibold border ${
                 selectedDate === dStr
                   ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30'
-                  : 'text-white/45 border-transparent hover:bg-white/[0.03]'
+                  : isToday
+                    ? 'text-emerald-200 border-emerald-400/25 bg-emerald-400/[0.06]'
+                    : 'text-white/45 border-transparent hover:bg-white/[0.03]'
               }`}
             >
               <div className="flex items-center justify-center gap-1">
                 <span>周{WEEKDAY_LABELS[i]}</span>
                 {dayHasConflict && <AlertTriangle className="w-3 h-3 text-rose-400/80" />}
+                {isToday && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
               </div>
               <div className="font-mono text-[13px] mt-0.5">{dayNum}</div>
             </button>
@@ -662,17 +703,34 @@ function WeekView({
         })}
         {HOURS.map((hour) => (
           <React.Fragment key={hour}>
-            <div className="text-[10px] font-mono text-white/30 py-2 pr-1 text-right">{String(hour).padStart(2, '0')}:00</div>
+            <div className={`text-[10px] font-mono py-2 pr-1 text-right ${isCurrentHour(hour) ? 'text-rose-300 font-bold' : 'text-white/30'}`}>
+              {String(hour).padStart(2, '0')}:00
+            </div>
             {weekDays.map((dStr) => {
               const cellEvents = events.filter((e) => e.startTime.slice(0, 13) === `${dStr}T${String(hour).padStart(2, '0')}`);
               const cellConflict = cellEvents.some((e) => conflictIds.has(e.id));
+              // P11-2c：今天当前小时格内画「现在」红线（按分钟比例定位）
+              const showNow = dStr === todayStr && isCurrentHour(hour);
               return (
                 <div
                   key={`${dStr}-${hour}`}
-                  className={`min-h-[44px] border rounded-lg p-0.5 ${
-                    cellConflict ? 'border-rose-400/30 bg-rose-500/[0.06]' : 'border-white/[0.04] bg-black/15'
+                  className={`relative min-h-[44px] border rounded-lg p-0.5 ${
+                    cellConflict
+                      ? 'border-rose-400/30 bg-rose-500/[0.06]'
+                      : dStr === todayStr
+                        ? 'border-emerald-400/15 bg-emerald-400/[0.02]'
+                        : 'border-white/[0.04] bg-black/15'
                   }`}
                 >
+                  {showNow && (
+                    <div
+                      className="absolute left-1 right-1 h-[2px] rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)] pointer-events-none z-10"
+                      style={{ top: `${(nowMinutes / 60) * 100}%` }}
+                    >
+                      <span className="absolute -left-1 -top-[3px] w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.9)]" />
+                      <span className="absolute right-0 -top-[16px] text-[8px] font-bold text-rose-300 bg-black/60 px-1 rounded">现在</span>
+                    </div>
+                  )}
                   {cellEvents.map((e) => {
                     const conflicted = conflictIds.has(e.id);
                     return (
@@ -687,6 +745,7 @@ function WeekView({
                         }`}
                       >
                         {conflicted && <AlertTriangle className="w-2.5 h-2.5 shrink-0" />}
+                        {e.recurrence && e.recurrence !== 'none' && <Repeat className="w-2.5 h-2.5 shrink-0 opacity-60" />}
                         <span className="truncate">{e.title}</span>
                       </button>
                     );
@@ -709,19 +768,39 @@ function DayView({
   onSelectEvent: (e: ApiEvent) => void; onEmptySlot: (hour: number) => void;
 }) {
   const HOURS = Array.from({ length: 12 }, (_, i) => i + 8);
+  // P11-2c：现在线（仅当选中的就是今天）
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const isToday = selectedDate === todayStr;
+  const nowHour = now.getHours();
+  const nowMin = now.getMinutes();
   return (
     <div className="h-full min-h-[420px] space-y-1 overflow-auto">
       <div className="text-[12px] text-white/40 mb-2">{selectedDate.replace(/-/g, '/')} · 时间轴（点击空白时段可预约）</div>
       {HOURS.map((hour) => {
         const slotEvents = events.filter((e) => new Date(e.startTime).getHours() === hour);
+        const isCurrent = isToday && nowHour === hour;
         return (
           <div key={hour} className="grid grid-cols-[56px_1fr] gap-2 items-stretch min-h-[52px]">
-            <div className="text-[11px] font-mono text-white/35 pt-2 text-right">{String(hour).padStart(2, '0')}:00</div>
+            <div className={`text-[11px] font-mono pt-2 text-right ${isCurrent ? 'text-rose-300 font-bold' : 'text-white/35'}`}>{String(hour).padStart(2, '0')}:00</div>
             <button
               type="button"
               onClick={() => { if (slotEvents.length === 0) onEmptySlot(hour); }}
-              className="rounded-xl border border-white/[0.05] bg-black/20 p-1.5 text-left hover:border-emerald-400/30 transition-colors min-h-[52px]"
+              className={`relative rounded-xl border p-1.5 text-left transition-colors min-h-[52px] ${
+                isCurrent
+                  ? 'border-rose-400/25 bg-rose-500/[0.04] hover:border-rose-400/40'
+                  : 'border-white/[0.05] bg-black/20 hover:border-emerald-400/30'
+              }`}
             >
+              {isCurrent && (
+                <div
+                  className="absolute left-2 right-2 h-[2px] rounded-full bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.8)] pointer-events-none z-10"
+                  style={{ top: `${(nowMin / 60) * 100}%` }}
+                >
+                  <span className="absolute -left-1 -top-[3px] w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.9)]" />
+                  <span className="absolute right-0 -top-[17px] text-[9px] font-bold text-rose-300 bg-black/60 px-1.5 rounded">现在 {String(nowHour).padStart(2, '0')}:{String(nowMin).padStart(2, '0')}</span>
+                </div>
+              )}
               {slotEvents.length === 0 && <span className="text-[10px] text-white/20 px-2">空闲 · 点击预约</span>}
               {slotEvents.map((e) => (
                 <div
@@ -729,7 +808,14 @@ function DayView({
                   onClick={(ev) => { ev.stopPropagation(); onSelectEvent(e); }}
                   className="px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500/25 to-teal-500/15 border border-emerald-400/30 mb-1 last:mb-0 cursor-pointer"
                 >
-                  <div className="text-[12px] font-semibold text-white">{e.title}</div>
+                  <div className="text-[12px] font-semibold text-white flex items-center gap-1">
+                    {e.recurrence && e.recurrence !== 'none' && (
+                      <span className="inline-flex items-center gap-0.5 px-1 py-0 rounded bg-white/10 text-[8px] font-bold text-white/60 shrink-0">
+                        <Repeat className="w-2 h-2" />{{ daily: '每天', weekly: '每周', biweekly: '双周', monthly: '每月' }[e.recurrence]}
+                      </span>
+                    )}
+                    <span className="truncate">{e.title}</span>
+                  </div>
                   <div className="text-[10px] text-white/45 mt-0.5">{fmtRange(e.startTime, e.endTime)}{e.location ? ` · ${e.location}` : ''}</div>
                 </div>
               ))}
